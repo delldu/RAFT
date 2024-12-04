@@ -24,12 +24,12 @@ struct FlowHead {
         conv1.padding = { 1, 1 };
         conv1.create_weight_tensors(ctx);
 
-        conv1.in_channels = 256;
-        conv1.out_channels = 2;
-        conv1.kernel_size = {3, 3};
-        conv1.stride = { 1, 1 };
-        conv1.padding = { 1, 1 };
-        conv1.create_weight_tensors(ctx);
+        conv2.in_channels = 256;
+        conv2.out_channels = 2;
+        conv2.kernel_size = {3, 3};
+        conv2.stride = { 1, 1 };
+        conv2.padding = { 1, 1 };
+        conv2.create_weight_tensors(ctx);
     }
 
     void setup_weight_names(const char *prefix) {
@@ -559,14 +559,14 @@ struct InstanceResidualBlock {
             conv3.create_weight_tensors(ctx);
         }
 
-        norm1.normalized_shape = planes;
+        norm1.num_features = planes;
         norm1.create_weight_tensors(ctx);
 
-        norm2.normalized_shape = planes;
+        norm2.num_features = planes;
         norm2.create_weight_tensors(ctx);
 
         if (stride > 1) { // for downsample ...
-            norm3.normalized_shape = planes;
+            norm3.num_features = planes;
             norm3.create_weight_tensors(ctx);
         }
     }
@@ -756,7 +756,6 @@ struct BatchBasicEncoder {
         layer3_1.planes = 128;
         layer3_1.stride = 2;
         layer3_1.create_weight_tensors(ctx);
-
 
         // self.conv2 = nn.Conv2d(128, 256, kernel_size=1)
         conv2.in_channels = 128;
@@ -1339,7 +1338,7 @@ struct RAFT : GGMLNetwork {
 
         {
             ggml_tensor_t *images, *fmaps, *fmap1, *fmap2;
-            images = ggml_cat(ctx, image1, image2, 3 /*dim on Batch*/);
+            images = ggml_concat(ctx, image1, image2, 3 /*dim on Batch*/);
             fmaps = fnet.forward(ctx, images);
             fmap1 = ggml_nn_slice(ctx, fmaps, 3/*dim*/, 0/*start*/, 1/*stop*/, 1/*step*/);
             fmap2 = ggml_nn_slice(ctx, fmaps, 3/*dim*/, 1/*start*/, 2/*stop*/, 1/*step*/);
@@ -1387,7 +1386,7 @@ struct VideoFlowNetwork {
         // -----------------------------------------------------------------------------------------
         net.set_device(device);
         net.start_engine();
-        // net.dump();
+        net.dump();
 
         check_point(model.preload("models/video_flow_f32.gguf") == RET_OK);
 

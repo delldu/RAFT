@@ -228,7 +228,7 @@ struct LayerNorm {
 ggml_tensor_t* ggml_nn_batch_norm2d(ggml_context_t* ctx, ggml_tensor_t* x, ggml_tensor_t* w, ggml_tensor_t* b, 
     ggml_tensor_t* mean, ggml_tensor_t* var, float eps);
 
-// !!! -----------------------------------------------------------------------
+// -----------------------------------------------------------------------
 struct BatchNorm2d {
     int64_t num_features;
     float eps = 1e-5; // Fixed default values
@@ -266,6 +266,35 @@ struct BatchNorm2d {
         return ggml_nn_batch_norm2d(ctx, x, w, b, running_mean, running_var, eps);
     }
 };
+
+// -----------------------------------------------------------
+// https://pytorch.org/docs/stable/generated/torch.nn.InstanceNorm2d.html
+// class torch.nn.InstanceNorm2d(num_features, eps=1e-05, momentum=0.1, affine=False, 
+//     track_running_stats=False, device=None, dtype=None)
+
+ggml_tensor_t* ggml_nn_instance_norm2d(ggml_context_t* ctx, ggml_tensor_t* x, float eps);
+
+// -----------------------------------------------------------------------
+struct InstanceNorm2d {
+    int64_t num_features;
+    float eps = 1e-5; // Fixed default values
+
+    void create_weight_tensors(ggml_context_t* ctx)
+    {
+        GGML_ASSERT(num_features > 0);
+    }
+
+    void setup_weight_names(const char* prefix)
+    {
+        GGML_UNUSED(prefix);
+    }
+
+    ggml_tensor_t* forward(ggml_context_t* ctx, ggml_tensor_t* x)
+    {
+        return ggml_nn_instance_norm2d(ctx, x, eps);
+    }
+};
+
 
 ggml_tensor_t* ggml_nn_batch_norm1d(ggml_context_t* ctx, ggml_tensor_t* x, ggml_tensor_t* w, ggml_tensor_t* b, 
     ggml_tensor_t* mean, ggml_tensor_t* var, float eps);
@@ -653,6 +682,21 @@ ggml_tensor_t* ggml_nn_batch_norm2d(ggml_context_t* ctx, ggml_tensor_t* x, ggml_
 
     return x;
 }
+
+ggml_tensor_t* ggml_nn_instance_norm2d(ggml_context_t* ctx, ggml_tensor_t* x, float eps)
+{
+    int W = x->ne[0];
+    int H = x->ne[1];
+    int C = x->ne[2];
+    int B = x->ne[3];
+
+    x = ggml_reshape_3d(ctx, x, W*H, C, B);
+    x = ggml_norm(ctx, x, eps);
+    x = ggml_reshape_4d(ctx, x, W, H, C, B);
+
+    return x;
+}
+
 
 // dell_add
 ggml_tensor_t* ggml_nn_batch_norm1d(ggml_context_t* ctx, ggml_tensor_t* x, ggml_tensor_t* w, ggml_tensor_t* b, 
