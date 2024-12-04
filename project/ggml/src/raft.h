@@ -1127,9 +1127,12 @@ struct RAFT : GGMLNetwork {
     struct BatchBasicEncoder cnet;
     struct InstanceBasicEncoder fnet;
     struct BasicUpdateBlock update_block;
-
     ggml_tensor_t *mesh_grid_9x9;
 
+    size_t get_graph_size()
+    {
+        return GGML_DEFAULT_GRAPH_SIZE * 4; // 2048 * 4
+    }
 
     void create_weight_tensors(struct ggml_context* ctx) {
         cnet.create_weight_tensors(ctx);
@@ -1307,11 +1310,6 @@ struct RAFT : GGMLNetwork {
         out = ggml_permute(ctx, out, 2, 0, 1, 3); // [C, W, H, B] -> [W, H, C, B]
 
         return out;
-    }
-
-    size_t get_graph_size()
-    {
-        return GGML_DEFAULT_GRAPH_SIZE * 4; // 2048 * 4
     }
 
     ggml_tensor_t* upsample_flow(ggml_context_t* ctx, ggml_tensor_t *flow, ggml_tensor_t *mask) {
