@@ -22,6 +22,9 @@ ggml_tensor_t* ggml_nn_grid_y(ggml_context_t *ctx, ggml_tensor_t *x, int h);
 ggml_tensor_t* ggml_nn_grid_x(ggml_context_t *ctx, ggml_tensor_t *x, int w);
 ggml_tensor_t* ggml_nn_arange(ggml_context_t *ctx, ggml_tensor_t *x);
 ggml_tensor_t* ggml_nn_relu6(ggml_context_t *ctx, ggml_tensor_t *x);
+ggml_tensor_t* ggml_nn_unfold(ggml_context_t* ctx, ggml_tensor_t* x, int k0, int k1,
+    int s0 /*=1*/, int s1 /*=1*/, int p0 /*=0*/, int p1 /*=0*/, int d0 /*=1*/, int d1 /*=1*/);
+
 
 // ----------------------------------------------------------------------------------------------------------------------------------------
 // https://pytorch.org/docs/stable/generated/torch.nn.Identity.html
@@ -186,6 +189,7 @@ struct ConvTranspose2d {
     }
 };
 
+
 // ----------------------------------------------------------------------------------------------------------------------------------------
 // https://pytorch.org/docs/stable/generated/torch.nn.LayerNorm.html
 // class torch.nn.LayerNorm(normalized_shape, eps=1e-05, elementwise_affine=True, bias=True, device=None, dtype=None)[source]
@@ -267,7 +271,7 @@ struct BatchNorm2d {
     }
 };
 
-// -----------------------------------------------------------
+// ----------------------------------------------------------------------------------------------------------------------------------------
 // https://pytorch.org/docs/stable/generated/torch.nn.InstanceNorm2d.html
 // class torch.nn.InstanceNorm2d(num_features, eps=1e-05, momentum=0.1, affine=False, 
 //     track_running_stats=False, device=None, dtype=None)
@@ -606,6 +610,7 @@ ggml_tensor_t* ggml_nn_conv_2d(ggml_context_t* ctx, ggml_tensor_t* x, ggml_tenso
     return x;
 }
 
+
 ggml_tensor_t* ggml_nn_conv_transpose_2d(ggml_context_t* ctx, ggml_tensor_t* x, ggml_tensor_t* w,
     ggml_tensor_t* b, int stride, int padding, int output_padding)
 {
@@ -635,6 +640,36 @@ ggml_tensor_t* ggml_nn_conv_transpose_2d(ggml_context_t* ctx, ggml_tensor_t* x, 
 
     return x;
 }
+
+ggml_tensor_t* ggml_nn_unfold(ggml_context_t* ctx, ggml_tensor_t* x, int k0, int k1,
+    int s0 /*=1*/, int s1 /*=1*/, int p0 /*=0*/, int p1 /*=0*/, int d0 /*=1*/, int d1 /*=1*/)
+{
+    int W = (int)x->ne[0];
+    int H = (int)x->ne[1];
+    int C = (int)x->ne[2];
+    int B = (int)x->ne[0];
+    // flow    f32 [128, 55, 2, 1], 
+
+    ggml_tensor_t *a = ggml_new_tensor_4d(ctx, GGML_TYPE_F16, k0, k1, C, C);
+    // GGML_API struct ggml_tensor * ggml_im2col(
+    //         struct ggml_context * ctx,
+    //         struct ggml_tensor  * a,  // convolution kernel
+    //         struct ggml_tensor  * b,  // data
+    //         int                   s0, // stride dimension 0
+    //         int                   s1, // stride dimension 1
+    //         int                   p0, // padding dimension 0
+    //         int                   p1, // padding dimension 1
+    //         int                   d0, // dilation dimension 0
+    //         int                   d1, // dilation dimension 1
+    //         bool                  is_2D,
+    //         enum ggml_type        dst_type);
+    x = ggml_im2col(ctx, a, x, s0, s1, p0, p1, d0, d1, true, GGML_TYPE_F32);
+    x = ggml_cont(ctx, ggml_permute(ctx, x, 2, 0, 1, 3)); // [C, W, H, B] -> [W, H, C, B];
+    x = ggml_reshape_3d(ctx, x, H*W, -1, 1); // -1 -- C*k0*k1
+
+    return x;
+}
+
 
 ggml_tensor_t* ggml_nn_layer_norm(ggml_context_t* ctx, ggml_tensor_t* x, ggml_tensor_t* w, ggml_tensor_t* b, int dim, float eps)
 {

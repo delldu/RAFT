@@ -37,12 +37,71 @@ int video_flow_predict(VideoFlowNetwork *flow_net, char *input_file, char *secon
         tensor_destroy(input2_tensor);
         tensor_destroy(input1_tensor);
 
-        TENSOR *xxxx_test;
-        xxxx_test = flow_net->net.get_output_tensor("xxxx_test");
-        if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** xxxx_test", xxxx_test);
-            tensor_destroy(xxxx_test);
-        }
+        tensor_show("-------------- output_tensor", output_tensor);
+
+
+        // TENSOR *xxxx_test;
+        // xxxx_test = flow_net->net.get_output_tensor("images");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** images", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+        // xxxx_test = flow_net->net.get_output_tensor("x1");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x1", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+        // xxxx_test = flow_net->net.get_output_tensor("x2");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x2", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+        // xxxx_test = flow_net->net.get_output_tensor("x3");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x3", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+        // xxxx_test = flow_net->net.get_output_tensor("x4");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x4", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+        // xxxx_test = flow_net->net.get_output_tensor("x5");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x5", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+        // xxxx_test = flow_net->net.get_output_tensor("x6");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x6", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+        // xxxx_test = flow_net->net.get_output_tensor("x7");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** x7", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+
+        // xxxx_test = flow_net->net.get_output_tensor("fmaps");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** fmaps", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
+
+        // xxxx_test = flow_net->net.get_output_tensor("BatchBasicEncoder");
+        // if (tensor_valid(xxxx_test)) {
+        //     tensor_show("********************** BatchBasicEncoder", xxxx_test);
+        //     tensor_destroy(xxxx_test);
+        // }
+
 
         tensor_saveas_image(output_tensor, 0 /*batch 0*/, output_file);
         chmod(output_file, 0644);
