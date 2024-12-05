@@ -40,60 +40,67 @@ int video_flow_predict(VideoFlowNetwork *flow_net, char *input_file, char *secon
         tensor_show("-------------- output_tensor", output_tensor);
 
 
-        // TENSOR *xxxx_test;
+        TENSOR *xxxx_test;
         // xxxx_test = flow_net->net.get_output_tensor("images");
         // if (tensor_valid(xxxx_test)) {
         //     tensor_show("********************** images", xxxx_test);
         //     tensor_destroy(xxxx_test);
         // }
 
-        // xxxx_test = flow_net->net.get_output_tensor("x1");
+        // xxxx_test = flow_net->net.get_output_tensor("xlist0");
         // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x1", xxxx_test);
+        //     tensor_show("********************** xlist0", xxxx_test);
         //     tensor_destroy(xxxx_test);
         // }
 
-        // xxxx_test = flow_net->net.get_output_tensor("x2");
+        // xxxx_test = flow_net->net.get_output_tensor("xlist1");
         // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x2", xxxx_test);
+        //     tensor_show("********************** xlist1", xxxx_test);
         //     tensor_destroy(xxxx_test);
         // }
 
-        // xxxx_test = flow_net->net.get_output_tensor("x3");
+        // xxxx_test = flow_net->net.get_output_tensor("xlist2");
         // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x3", xxxx_test);
-        //     tensor_destroy(xxxx_test);
-        // }
-        // xxxx_test = flow_net->net.get_output_tensor("x4");
-        // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x4", xxxx_test);
+        //     tensor_show("********************** xlist2", xxxx_test);
         //     tensor_destroy(xxxx_test);
         // }
 
-        // xxxx_test = flow_net->net.get_output_tensor("x5");
-        // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x5", xxxx_test);
-        //     tensor_destroy(xxxx_test);
-        // }
+        xxxx_test = flow_net->net.get_output_tensor("corr");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** corr", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
 
-        // xxxx_test = flow_net->net.get_output_tensor("x6");
-        // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x6", xxxx_test);
-        //     tensor_destroy(xxxx_test);
-        // }
+        xxxx_test = flow_net->net.get_output_tensor("net");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** net", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
 
-        // xxxx_test = flow_net->net.get_output_tensor("x7");
-        // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** x7", xxxx_test);
-        //     tensor_destroy(xxxx_test);
-        // }
+        xxxx_test = flow_net->net.get_output_tensor("mask");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** mask", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
 
 
-        // xxxx_test = flow_net->net.get_output_tensor("fmaps");
-        // if (tensor_valid(xxxx_test)) {
-        //     tensor_show("********************** fmaps", xxxx_test);
-        //     tensor_destroy(xxxx_test);
-        // }
+        xxxx_test = flow_net->net.get_output_tensor("inp");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** inp", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
+
+        xxxx_test = flow_net->net.get_output_tensor("m");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** m", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
+
+        xxxx_test = flow_net->net.get_output_tensor("up_mask");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** up_mask", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
 
 
         // xxxx_test = flow_net->net.get_output_tensor("BatchBasicEncoder");

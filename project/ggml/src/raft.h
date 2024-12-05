@@ -179,17 +179,8 @@ struct SepConvGRU {
         one_z = ggml_sub(ctx, one_z, z);
         r = ggml_sigmoid(ctx, convr1.forward(ctx, hx));
         // q
-        // ggml_tensor_dump("r", r);
-        // ggml_tensor_dump("h", h);
         rh = ggml_mul(ctx, r, h);
-        // ggml_tensor_dump("r*h", rh);
-        // ggml_tensor_dump("x", x);
-
         rh = ggml_concat(ctx, rh, x, 2 /*dim on channel*/);
-        // ggml_tensor_dump("==> rh", rh);
-
-
-
         q = ggml_tanh(ctx, convq1.forward(ctx, rh));
         h = ggml_add(ctx, ggml_mul(ctx, one_z, h), ggml_mul(ctx, z, q));
 
@@ -427,23 +418,15 @@ struct BasicUpdateBlock {
 
         std::vector<ggml_tensor_t *> xlist;
         ggml_tensor_t *motion_feat = encoder.forward(ctx, flow, corr);
-        // ggml_tensor_dump("flow", flow);
-        // ggml_tensor_dump("corr", corr);
-        // ggml_tensor_dump("motion_feat", motion_feat);
-        // ggml_tensor_dump("inp", inp);
 
         // motion_feat    f32 [128, 55, 128, 1], MotionEncoder
         // inp    f32 [128, 55, 128, 1], 
         inp = ggml_concat(ctx, inp, motion_feat, 2 /*dim on channe*/);
-        // ggml_tensor_dump("==> inp", inp);
-        // ==> inp    f32 [128, 55, 256, 1], 
 
         // tensor [net] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: -0.000222
         // tensor [inp] size: [1, 128, 55, 128], min: 0.0, max: 5.488075, mean: 0.038178
         // tensor [corr] size: [1, 324, 55, 128], min: -5.405947, max: 25.431339, mean: 0.233413
         // tensor [m] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
-
-
         net = gru.forward(ctx, net, inp);
 
         ggml_tensor_t *delta_flow = flow_head.forward(ctx, net);
@@ -454,17 +437,9 @@ struct BasicUpdateBlock {
         mask = mask_2.forward(ctx, mask);
         mask = ggml_scale(ctx, mask, 0.25f);
 
-        // ggml_tensor_dump("==> net", net);
-        // ggml_tensor_dump("==> mask", mask);
-        // ggml_tensor_dump("==> delta_flow", delta_flow);
-
         xlist.push_back(net);
         xlist.push_back(mask);
         xlist.push_back(delta_flow);
-
-        // delta_flow = ggml_cont(ctx, delta_flow);
-        // ggml_set_name(delta_flow, "BasicUpdateBlock");
-        // ggml_set_output(delta_flow);
 
     	return xlist;
     }
@@ -582,9 +557,6 @@ struct BatchResidualBlock {
         }
         x = ggml_relu(ctx, ggml_add(ctx, x, y));
 
-        x = ggml_cont(ctx, x);
-        ggml_set_name(x, "BatchResidualBlock");
-        ggml_set_output(x);
 
     	return x;
     }
@@ -1505,9 +1477,6 @@ struct RAFT : GGMLNetwork {
             // # mesh_grid_9x9 -- [9, 9, 2]
             // # (centroid + mesh_grid_9x9) -- [7040, 9, 9, 2]
             centroid = ggml_add(ctx, centroid, mesh_grid_9x9);
-            // ==> centroid    f32 [2, 9, 9, 7040], 
-            // ggml_tensor_dump("xlist[i]", xlist[i]);
-            // xlist[i]    f32 [128, 55, 1, 7040], 
 
             corr = bilinear_sampler(ctx, xlist[i], centroid);
             // corr  -- f32 [9, 9, 1, 7040]
@@ -1519,7 +1488,6 @@ struct RAFT : GGMLNetwork {
 
         ggml_tensor_t *out = ggml_cat(ctx, 4, out_pyramid[0], out_pyramid[1], out_pyramid[2], out_pyramid[3], 0/*dim*/);
 
-        ggml_tensor_dump("out", out);
         // [324, 128, 55, 1]
         out = ggml_cont(ctx, ggml_permute(ctx, out, 2, 0, 1, 3)); // [C, W, H, B] -> [W, H, C, B]
         // out    f32 [128, 55, 324, 1],  (permuted) (cont)
@@ -1555,15 +1523,12 @@ struct RAFT : GGMLNetwork {
         int D = (int)flow->ne[2];
         int H = (int)flow->ne[1];
         int W = (int)flow->ne[0];
-
-        ggml_tensor_dump("flow", flow);
         // flow    f32 [128, 55, 2, 1], 
 
         flow = ggml_scale(ctx, flow, 8.0f);
         ggml_tensor_t *up_flow;
         up_flow = ggml_nn_unfold(ctx, flow, 3 /*k0*/, 3 /*k1*/,
                 1 /*s0*/, 1/*s1*/, 1/*p0*/, 1/*p1*/, 1/*d0*/, 1/*d1*/);
-        ggml_tensor_dump("up_flow", up_flow);
         // [128*55, 18, 1]
 
         up_flow = ggml_reshape_4d(ctx, up_flow, H*W, 1, 9, 2);
@@ -1571,8 +1536,6 @@ struct RAFT : GGMLNetwork {
         mask = ggml_softmax(ctx, mask, 2 /*dim*/);
 
 
-        ggml_tensor_dump("mask", mask);
-        ggml_tensor_dump("up_flow", up_flow);
         // mask    f32 [7040, 64, 9, 1], 
         // up_flow    f32 [7040, 1, 9, 2],  (permuted) (cont) (reshaped) (reshaped)
 
@@ -1581,7 +1544,6 @@ struct RAFT : GGMLNetwork {
         mask = ggml_repeat_ext(ctx, mask, 1, 1, 1, 2);
         up_flow = ggml_repeat_ext(ctx, up_flow, 1, 64, 1, 1);
         up_flow = ggml_mul(ctx, mask, up_flow);
-        ggml_tensor_dump("up_flow", up_flow);
         // up_flow    f32 [7040, 64, 9, 2], ==> 7040, 64, 2
 
         // up_flow2 = torch.sum(mask2 * up_flow2, dim=1)
@@ -1593,12 +1555,8 @@ struct RAFT : GGMLNetwork {
         // # tensor [up_flow] size: [2, 64, 7040], min: -9.221816, max: 7.563138, mean: -0.876239
 
         up_flow = ggml_reshape_4d(ctx, up_flow, W, H, 64, 2);
-        ggml_tensor_dump("up_flow3", up_flow);
         up_flow = ggml_shuffle(ctx, up_flow, 8);
-        ggml_tensor_dump("up_flow4", up_flow);
-
         up_flow = ggml_reshape_4d(ctx, up_flow, 8*W, 8*H, 2, B);
-        ggml_tensor_dump("up_flow5", up_flow);
 
         return up_flow;
     }
@@ -1649,34 +1607,23 @@ struct RAFT : GGMLNetwork {
             // tensor [images] size: [2, 3, 440, 1024], min: -1.0, max: 1.0, mean: -0.245923
             // tensor [fmaps] size: [2, 256, 55, 128], min: -4.488491, max: 5.076661, mean: 0.003168
 
-            // return fmaps;
 
             xlist = create_corr_pyramid(ctx, fmap1, fmap2);
-
-            // ggml_tensor_dump("xlist[0]", xlist[0]);
-            // ggml_tensor_dump("xlist[1]", xlist[1]);
-            // ggml_tensor_dump("xlist[2]", xlist[2]);
-            // ggml_tensor_dump("xlist[3]", xlist[3]);
         }
 
         {
             ggml_tensor_t *cnet_temp = cnet.forward(ctx, image1);
-            // ggml_tensor_dump("cnet_temp", cnet_temp);
 
             int N = (int)cnet_temp->ne[2]/2;
             net = ggml_nn_slice(ctx, cnet_temp, 2/*dim on channel*/, 0, N, 1/*step*/);
             inp = ggml_nn_slice(ctx, cnet_temp, 2/*dim on channel*/, N, 2*N, 1/*step*/);
             net = ggml_tanh(ctx, net);
             inp = ggml_relu(ctx, inp);
-
-            // ggml_tensor_dump("net", net);
-            // ggml_tensor_dump("inp", inp);
         }
 
-        coords0 = ggml_grid_mesh(ctx, B, H/8, W/8, 1/*norm*/);
+        coords0 = ggml_grid_mesh(ctx, B, H/8, W/8, 0/*norm*/);
         coords1 = coords0;
-
-        // ggml_tensor_dump("coords0", coords0);
+        // # tensor [coords0] size: [1, 2, 55, 128], min: 0.0, max: 127.0, mean: 45.25
 
         {
             ggml_tensor_t *corr, *delta_flow;
@@ -1684,7 +1631,6 @@ struct RAFT : GGMLNetwork {
             std::vector<ggml_tensor_t *>ylist;
             for (int i = 0; i < 20; i++) {
                 corr = index_corr_volume(ctx, coords1, xlist);
-                // corr    f32 [128, 55, 324, 1],  (permuted) (cont)
                 // # tensor [corr] size: [1, 324, 55, 128], min: -4.405475, max: 21.874269, mean: 0.16877
                 m = ggml_sub(ctx, coords1, coords0);
 
@@ -1696,23 +1642,17 @@ struct RAFT : GGMLNetwork {
                 ylist = update_block.forward(ctx, net, inp, corr, m);
 
                 net = ylist[0]; up_mask = ylist[1]; delta_flow = ylist[2];
-                ggml_tensor_dump("up_mask", up_mask);
 
                 coords1 = ggml_add(ctx, coords1, delta_flow);
             }
         }
         m = ggml_sub(ctx, coords1, coords0);
 
-        ggml_tensor_dump("==> m", m);
-        ggml_tensor_dump("==> up_mask", up_mask);
-        // ==> m    f32 [128, 55, 2, 1], 
-        // ==> up_mask    f32 [128, 55, 576, 1], 
 
         // tensor [m] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
         // tensor [up_mask] size: [1, 576, 55, 128], min: -19.438438, max: 9.087296, mean: -0.03894
 
         ggml_tensor_t *flow_up = upsample_flow(ctx, m, up_mask);
-        ggml_tensor_dump("flow_up", flow_up);
         // tensor [flow_up] size: [1, 2, 440, 1024], min: -9.221816, max: 7.563138, mean: -0.876239
 
         // Info: -------------- output_tensor Tensor: 1x2x440x1024
