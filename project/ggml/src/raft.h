@@ -43,17 +43,10 @@ struct FlowHead {
     }
 
     ggml_tensor_t* forward(struct ggml_context* ctx, ggml_tensor_t* x) {
-        // x = ggml_nn_arange(ctx, x);
-
         // x = self.conv2(self.relu(self.conv1(x)))
         x = conv1.forward(ctx, x);
         x = ggml_relu(ctx, x);
         x = conv2.forward(ctx, x);
-
-        x = ggml_cont(ctx, x);
-        ggml_set_name(x, "FlowHead");
-        ggml_set_output(x);
-
 
     	return x;
     }
@@ -164,15 +157,7 @@ struct SepConvGRU {
         ggml_tensor_t *hx, *z, *r, *rh, *q, *one_z;
 
         // # horizontal
-        // h = ggml_nn_arange(ctx, h);
-        // x = ggml_nn_arange(ctx, x);
-        // ----------------------------------------------------
-
-        // tensor [net] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: -0.000222
-        // tensor [inp] size: [1, 256, 55, 128], min: 0.0, max: 5.488075, mean: 0.038178
-
-
-        hx = ggml_concat(ctx, h, x, 2 /*dim on channel*/);
+         hx = ggml_concat(ctx, h, x, 2 /*dim on channel*/);
         z = ggml_sigmoid(ctx, convz1.forward(ctx, hx));
         one_z = ggml_dup(ctx, z);
         one_z = ggml_constant(ctx, one_z, 1.0);
@@ -196,11 +181,6 @@ struct SepConvGRU {
         q = ggml_tanh(ctx, convq2.forward(ctx, rh));
         h = ggml_add(ctx, ggml_mul(ctx, one_z, h), ggml_mul(ctx, z, q));
 
-
-        // h = ggml_cont(ctx, h);
-        // ggml_set_name(h, "SepConvGRU");
-        // ggml_set_output(h);
-
     	return h;
     }
 };
@@ -215,8 +195,6 @@ struct SepConvGRU {
 ) */
 
 struct MotionEncoder {
-    // network hparams
-    
     // network params
     struct Conv2d convc1;
     struct Conv2d convc2;
@@ -291,9 +269,6 @@ struct MotionEncoder {
 
         // # tensor [motion_feat] size: [1, 128, 55, 128], min: -1.508427, max: 6.19675, mean: 0.129374
         // return motion_feat
-        // flow = ggml_nn_arange(ctx, flow);
-        // corr = ggml_nn_arange(ctx, corr);
-
 
         ggml_tensor_t *cor;
         cor = convc1.forward(ctx, corr);
@@ -314,12 +289,6 @@ struct MotionEncoder {
 
         ggml_tensor_t *motion_feat;
         motion_feat = ggml_concat(ctx, cor_flo, flow, 2/*dim on channel*/);
-
-
-
-        motion_feat = ggml_cont(ctx, motion_feat);
-        ggml_set_name(motion_feat, "MotionEncoder");
-        ggml_set_output(motion_feat);
 
         return motion_feat;
     }
@@ -411,25 +380,84 @@ struct BasicUpdateBlock {
     //     return net, mask, delta_flow
     std::vector<ggml_tensor_t *> forward(struct ggml_context* ctx, ggml_tensor_t* net, ggml_tensor_t* inp,
         ggml_tensor_t* corr, ggml_tensor_t* flow) {
-        // net = ggml_nn_arange(ctx, net);
-        // inp = ggml_nn_arange(ctx, inp);
-        // corr = ggml_nn_arange(ctx, corr);
-        // flow = ggml_nn_arange(ctx, flow);
-
-        std::vector<ggml_tensor_t *> xlist;
-        ggml_tensor_t *motion_feat = encoder.forward(ctx, flow, corr);
-
-        // motion_feat    f32 [128, 55, 128, 1], MotionEncoder
-        // inp    f32 [128, 55, 128, 1], 
-        inp = ggml_concat(ctx, inp, motion_feat, 2 /*dim on channe*/);
-
         // tensor [net] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: -0.000222
         // tensor [inp] size: [1, 128, 55, 128], min: 0.0, max: 5.488075, mean: 0.038178
         // tensor [corr] size: [1, 324, 55, 128], min: -5.405947, max: 25.431339, mean: 0.233413
-        // tensor [m] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
+        // tensor [flow] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
+
+        std::vector<ggml_tensor_t *> xlist;
+
+        // flow = ggml_cont(ctx, flow);
+        // ggml_set_name(flow, "flow");
+        // ggml_set_output(flow);
+
+        corr = ggml_cont(ctx, corr);
+        ggml_set_name(corr, "corr");
+        ggml_set_output(corr);
+
+
+        ggml_tensor_t *motion_feat = encoder.forward(ctx, flow, corr);
+
+        motion_feat = ggml_cont(ctx, motion_feat);
+        ggml_set_name(motion_feat, "motion_feat");
+        ggml_set_output(motion_feat);
+
+
+        // Info: ********************** flow Tensor: 1x2x55x128
+        // min: -690.0397, max: 727.3568, mean: -2.0973
+        // Info: ********************** corr Tensor: 1x324x55x128
+        // min: -3.6457, max: 12.8752, mean: 0.0917
+        // Info: ********************** motion_feat Tensor: 1x128x55x128
+        // min: -690.0397, max: 727.3568, mean: 3.2731
+
+
+
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: 0.0, max: 27.771051, mean: 0.248971
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.231163, max: 6.667092, mean: 0.124499
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.213821, max: 6.57347, mean: 0.122071
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.196342, max: 8.667865, mean: 0.124009
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.202042, max: 6.649434, mean: 0.124851
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.202976, max: 6.519124, mean: 0.125014
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.212376, max: 6.62364, mean: 0.125172
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.224716, max: 6.26437, mean: 0.125271
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.247585, max: 6.365556, mean: 0.125302
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.254894, max: 6.342296, mean: 0.125405
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.249577, max: 6.391676, mean: 0.125365
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.245121, max: 6.396429, mean: 0.125442
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.240402, max: 6.534332, mean: 0.125424
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.240623, max: 6.446226, mean: 0.125442
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.232243, max: 6.580369, mean: 0.1254
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.232037, max: 6.420638, mean: 0.125458
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.230373, max: 6.605807, mean: 0.125387
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.22847, max: 6.440721, mean: 0.125446
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.227055, max: 6.571367, mean: 0.125326
+        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.224991, max: 6.451536, mean: 0.125444
+
+
+
+        inp = ggml_concat(ctx, inp, motion_feat, 2 /*dim on channe*/);
         net = gru.forward(ctx, net, inp);
 
+        net = ggml_cont(ctx, net);
+        ggml_set_name(net, "gru");
+        ggml_set_output(net);
+
+
         ggml_tensor_t *delta_flow = flow_head.forward(ctx, net);
+
+        delta_flow = ggml_cont(ctx, delta_flow);
+        ggml_set_name(delta_flow, "flow_head");
+        ggml_set_output(delta_flow);
+
+
+        // Info: ********************** motion_feat Tensor: 1x128x55x128
+        // min: -690.0397, max: 727.3568, mean: 3.2731
+        // Info: ********************** gru Tensor: 1x128x55x128
+        // min: -20.5265, max: 20.8681, mean: -0.0055
+        // Info: ********************** flow_head Tensor: 1x2x55x128
+        // min: -94.1873, max: 91.4377, mean: -4.3792
+
+
 
         ggml_tensor_t *mask;
         mask = mask_0.forward(ctx, net);
@@ -1291,7 +1319,7 @@ struct RAFT : GGMLNetwork {
         fnet.create_weight_tensors(ctx);
         update_block.create_weight_tensors(ctx);
 
-        mesh_grid_9x9 = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, 1, 9, 9, 2);
+        mesh_grid_9x9 = ggml_new_tensor_4d(ctx, GGML_TYPE_F32, 2, 9, 9, 1);
     }
 
     void setup_weight_names(const char *prefix) {
@@ -1414,10 +1442,6 @@ struct RAFT : GGMLNetwork {
         fmap2 = ggml_reshape_3d(ctx, fmap2, W*H, C, B);
 
         fmap1 = ggml_transpose(ctx, fmap1);
-
-        // ggml_tensor_dump("fmap1", fmap1);
-        // ggml_tensor_dump("fmap2", fmap2);
-
         ggml_tensor_t *corr = ggml_nn_mul_mat(ctx, fmap1, fmap2);
         corr = ggml_reshape_4d(ctx, corr, W, H, 1, H*W);
         corr = ggml_scale(ctx, corr, 1.0f/16.0);
@@ -1526,10 +1550,20 @@ struct RAFT : GGMLNetwork {
         // flow    f32 [128, 55, 2, 1], 
 
         flow = ggml_scale(ctx, flow, 8.0f);
+        flow = ggml_cont(ctx, flow);
+        ggml_set_name(flow, "flow");
+        ggml_set_output(flow);
+
+
         ggml_tensor_t *up_flow;
         up_flow = ggml_nn_unfold(ctx, flow, 3 /*k0*/, 3 /*k1*/,
                 1 /*s0*/, 1/*s1*/, 1/*p0*/, 1/*p1*/, 1/*d0*/, 1/*d1*/);
         // [128*55, 18, 1]
+        up_flow = ggml_cont(ctx, up_flow);
+        ggml_set_name(up_flow, "up_flow");
+        ggml_set_output(up_flow);
+
+
 
         up_flow = ggml_reshape_4d(ctx, up_flow, H*W, 1, 9, 2);
         mask = ggml_reshape_4d(ctx, mask, H*W, 64, 9, 1);
@@ -1544,6 +1578,13 @@ struct RAFT : GGMLNetwork {
         mask = ggml_repeat_ext(ctx, mask, 1, 1, 1, 2);
         up_flow = ggml_repeat_ext(ctx, up_flow, 1, 64, 1, 1);
         up_flow = ggml_mul(ctx, mask, up_flow);
+
+        // up_flow = ggml_cont(ctx, up_flow);
+        // ggml_set_name(up_flow, "up_flow");
+        // ggml_set_output(up_flow);
+
+
+
         // up_flow    f32 [7040, 64, 9, 2], ==> 7040, 64, 2
 
         // up_flow2 = torch.sum(mask2 * up_flow2, dim=1)
@@ -1568,6 +1609,8 @@ struct RAFT : GGMLNetwork {
         GGML_UNUSED(argc);
         image1 = argv[0];
         image2 = argv[1];
+
+        mesh_grid_9x9 = ggml_cont(ctx, ggml_permute(ctx, mesh_grid_9x9, 3, 1, 2, 0)); // [2, 9, 9, 1] -> [1, 9, 9, 2]
 
         image1 = resize_pad(ctx, image1);
         image2 = resize_pad(ctx, image1);
@@ -1609,6 +1652,37 @@ struct RAFT : GGMLNetwork {
 
 
             xlist = create_corr_pyramid(ctx, fmap1, fmap2);
+
+            // xlist[0] = ggml_cont(ctx, xlist[0]);
+            // ggml_set_name(xlist[0], "xlist0");
+            // ggml_set_output(xlist[0]);
+
+            // xlist[1] = ggml_cont(ctx, xlist[1]);
+            // ggml_set_name(xlist[1], "xlist1");
+            // ggml_set_output(xlist[1]);
+
+            // xlist[2] = ggml_cont(ctx, xlist[2]);
+            // ggml_set_name(xlist[2], "xlist2");
+            // ggml_set_output(xlist[2]);
+
+            // xlist[3] = ggml_cont(ctx, xlist[3]);
+            // ggml_set_name(xlist[3], "xlist3");
+            // ggml_set_output(xlist[3]);
+
+            // Info: ********************** xlist0 Tensor: 7040x1x55x128
+            // min: -7.2816, max: 27.4016, mean: 0.0334
+            // Info: ********************** xlist1 Tensor: 7040x1x27x64
+            // min: -4.1553, max: 9.4860, mean: 0.0326
+            // Info: ********************** xlist2 Tensor: 7040x1x13x32
+            // min: -2.0840, max: 3.9671, mean: 0.0329
+            // Info: ********************** xlist3 Tensor: 7040x1x6x16
+            // min: -1.3456, max: 2.7473, mean: 0.0332
+
+            // # corr_pyramid is list: len = 4
+            // #     tensor [item] size: [7040, 1, 55, 128], min: -7.369149, max: 25.431339, mean: 0.033188
+            // #     tensor [item] size: [7040, 1, 27, 64], min: -3.66336, max: 9.582128, mean: 0.032375
+            // #     tensor [item] size: [7040, 1, 13, 32], min: -2.107447, max: 4.198452, mean: 0.03262
+            // #     tensor [item] size: [7040, 1, 6, 16], min: -1.357178, max: 2.21133, mean: 0.03297
         }
 
         {
@@ -1619,17 +1693,26 @@ struct RAFT : GGMLNetwork {
             inp = ggml_nn_slice(ctx, cnet_temp, 2/*dim on channel*/, N, 2*N, 1/*step*/);
             net = ggml_tanh(ctx, net);
             inp = ggml_relu(ctx, inp);
+
+            // tensor [net] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: -0.000222
+            // tensor [inp] size: [1, 128, 55, 128], min: 0.0, max: 5.488075, mean: 0.038178
+
+            // Info: ********************** net Tensor: 1x128x55x128
+            // min: -1.0000, max: 1.0000, mean: -0.0002
+            // Info: ********************** inp Tensor: 1x128x55x128
+            // min: 0.0000, max: 5.4858, mean: 0.0382
         }
 
         coords0 = ggml_grid_mesh(ctx, B, H/8, W/8, 0/*norm*/);
         coords1 = coords0;
         // # tensor [coords0] size: [1, 2, 55, 128], min: 0.0, max: 127.0, mean: 45.25
-
+        // --------------------------------------------------------------------------------------------------------
         {
             ggml_tensor_t *corr, *delta_flow;
 
             std::vector<ggml_tensor_t *>ylist;
-            for (int i = 0; i < 20; i++) {
+            // xxxx_debug
+            for (int i = 0; i < 1; i++) {
                 corr = index_corr_volume(ctx, coords1, xlist);
                 // # tensor [corr] size: [1, 324, 55, 128], min: -4.405475, max: 21.874269, mean: 0.16877
                 m = ggml_sub(ctx, coords1, coords0);
@@ -1639,24 +1722,50 @@ struct RAFT : GGMLNetwork {
                 // tensor [corr] size: [1, 324, 55, 128], min: -5.405947, max: 25.431339, mean: 0.233413
                 // tensor [m] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
 
+                // net = ggml_nn_arange(ctx, net);
+                // inp = ggml_nn_arange(ctx, inp);
+                // corr = ggml_nn_arange(ctx, corr);
+                // m = ggml_nn_arange(ctx, m);
+
                 ylist = update_block.forward(ctx, net, inp, corr, m);
 
                 net = ylist[0]; up_mask = ylist[1]; delta_flow = ylist[2];
+                // net = ggml_cont(ctx, net);
+                // ggml_set_name(net, "net");
+                // ggml_set_output(net);
+
+                // up_mask = ggml_cont(ctx, up_mask);
+                // ggml_set_name(up_mask, "up_mask");
+                // ggml_set_output(up_mask);
+
+                // delta_flow = ggml_cont(ctx, delta_flow);
+                // ggml_set_name(delta_flow, "delta_flow");
+                // ggml_set_output(delta_flow);
+
+                // Info: ********************** up_mask Tensor: 1x576x55x128
+                // min: -4.3849, max: 2.1323, mean: -0.1609
+                // Info: ********************** delta_flow Tensor: 1x2x55x128
+                // min: -4.1365, max: 4.3125, mean: -1.0573
+
+                // tensor [up_mask] size: [1, 576, 55, 128], min: -3.754837, max: 1.990122, mean: -0.048588
+                // tensor [delta_flow] size: [1, 2, 55, 128], min: -3.181628, max: 1.919293, mean: 0.090983
+
 
                 coords1 = ggml_add(ctx, coords1, delta_flow);
             }
         }
         m = ggml_sub(ctx, coords1, coords0);
 
-
         // tensor [m] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
         // tensor [up_mask] size: [1, 576, 55, 128], min: -19.438438, max: 9.087296, mean: -0.03894
 
         ggml_tensor_t *flow_up = upsample_flow(ctx, m, up_mask);
+        flow_up = ggml_cont(ctx, flow_up);
+
         // tensor [flow_up] size: [1, 2, 440, 1024], min: -9.221816, max: 7.563138, mean: -0.876239
 
         // Info: -------------- output_tensor Tensor: 1x2x440x1024
-        // min: -309.3723, max: 694.2195, mean: -23.5181
+        // min: -387.5398, max: 622.5826, mean: -3.3714
 
     	return flow_up;
     }
