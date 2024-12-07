@@ -227,23 +227,35 @@ void GGMLNetwork::stop_engine()
 
     // Clean backend
     {
-        if (eng->inputs_backend_buffer != NULL)
-            ggml_backend_buffer_free(eng->inputs_backend_buffer);
-        if (eng->weight_backend_buffer != NULL)
+        // if (eng->inputs_backend_buffer != NULL) {
+        //     ggml_backend_buffer_free(eng->inputs_backend_buffer);
+        // }
+
+        if (eng->weight_backend_buffer != NULL) {
             ggml_backend_buffer_free(eng->weight_backend_buffer);
-        if (eng->backend != NULL)
+        }
+
+        if (eng->backend != NULL) {
             ggml_backend_free(eng->backend);
+        }
     }
 
     // Clean context
     {
-        if (eng->inputs_context != NULL)
+        if (eng->inputs_context != NULL) {
             ggml_free(eng->inputs_context);
-        if (eng->weight_context != NULL)
+        }
+
+        if (eng->weight_context != NULL) {
             ggml_free(eng->weight_context);
-        if (eng->graph_cpu_buffer)
+        }
+
+        if (eng->graph_cpu_buffer) {
             free(eng->graph_cpu_buffer);
+        }
+
         memset((void*)eng, 0, sizeof(GGMLEngine));
+        CheckPoint();
     }
     // system("nvidia-smi");
 }
@@ -654,6 +666,7 @@ TENSOR* GGMLNetwork::engine_forward(int argc, TENSOR* argv[])
             // Backend ...
             if (m_ggml_engine.inputs_backend_buffer != NULL) {
                 ggml_backend_buffer_free(m_ggml_engine.inputs_backend_buffer);
+                m_ggml_engine.inputs_backend_buffer = NULL;
             }
 
             m_ggml_engine.inputs_backend_buffer
