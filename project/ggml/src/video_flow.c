@@ -87,17 +87,46 @@ int video_flow_predict(VideoFlowNetwork *flow_net, char *input_file, char *secon
         // }
 
 
-        xxxx_test = flow_net->net.get_output_tensor("FlowHead");
+        xxxx_test = flow_net->net.get_output_tensor("x_flow");
         if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** FlowHead", xxxx_test);
+            tensor_show("********************** x_flow", xxxx_test);
             tensor_destroy(xxxx_test);
         }
 
-        xxxx_test = flow_net->net.get_output_tensor("corr");
+        xxxx_test = flow_net->net.get_output_tensor("x_corr");
         if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** corr", xxxx_test);
+            tensor_show("********************** x_corr", xxxx_test);
             tensor_destroy(xxxx_test);
         }
+
+        xxxx_test = flow_net->net.get_output_tensor("x_motion_feat");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** x_motion_feat", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
+
+        xxxx_test = flow_net->net.get_output_tensor("x_inp");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** x_inp", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
+
+
+        xxxx_test = flow_net->net.get_output_tensor("x_net");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** x_net", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
+
+        xxxx_test = flow_net->net.get_output_tensor("x_delta_flow");
+        if (tensor_valid(xxxx_test)) {
+            tensor_show("********************** x_delta_flow", xxxx_test);
+            tensor_destroy(xxxx_test);
+        }
+
+
+
+
 
         xxxx_test = flow_net->net.get_output_tensor("m");
         if (tensor_valid(xxxx_test)) {
@@ -105,23 +134,12 @@ int video_flow_predict(VideoFlowNetwork *flow_net, char *input_file, char *secon
             tensor_destroy(xxxx_test);
         }
 
-        xxxx_test = flow_net->net.get_output_tensor("up_mask");
+        xxxx_test = flow_net->net.get_output_tensor("update_mask");
         if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** up_mask", xxxx_test);
+            tensor_show("********************** update_mask", xxxx_test);
             tensor_destroy(xxxx_test);
         }
 
-        xxxx_test = flow_net->net.get_output_tensor("grid");
-        if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** grid", xxxx_test);
-            tensor_destroy(xxxx_test);
-        }
-
-        xxxx_test = flow_net->net.get_output_tensor("grid_sample");
-        if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** grid_sample", xxxx_test);
-            tensor_destroy(xxxx_test);
-        }
 
         // xxxx_test = flow_net->net.get_output_tensor("m");
         // if (tensor_valid(xxxx_test)) {
