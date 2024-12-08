@@ -87,9 +87,9 @@ int video_flow_predict(VideoFlowNetwork *flow_net, char *input_file, char *secon
         // }
 
 
-        xxxx_test = flow_net->net.get_output_tensor("centroid");
+        xxxx_test = flow_net->net.get_output_tensor("FlowHead");
         if (tensor_valid(xxxx_test)) {
-            tensor_show("********************** centroid", xxxx_test);
+            tensor_show("********************** FlowHead", xxxx_test);
             tensor_destroy(xxxx_test);
         }
 

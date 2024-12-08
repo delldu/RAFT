@@ -5,13 +5,7 @@
 
 #pragma GCC diagnostic ignored "-Wformat-truncation"
 
-/*
- FlowHead(
-  (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  (conv2): Conv2d(256, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  (relu): ReLU()
-) */
-
+// --------------------------------------------------------------------------
 struct FlowHead {
     struct Conv2d conv1;
     struct Conv2d conv2;
@@ -48,24 +42,21 @@ struct FlowHead {
         x = ggml_relu(ctx, x);
         x = conv2.forward(ctx, x);
 
+        // Info: ********************** FlowHead Tensor: 1x2x55x128
+        // min: -4.7069, max: 15.6250, mean: 4.0795
+        // tensor [FlowHead] size: [1, 2, 55, 128], min: -4.699598, max: 15.597569, mean: 4.074663
+
     	return x;
     }
 };
 
-/*
- SepConvGRU(
-  (convz1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-  (convr1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-  (convq1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-  (convz2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-  (convr2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-  (convq2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-) */
-
+// -------------------------------------------------------------------------------
 struct SepConvGRU {
-    // network hparams
-    
-    // network params
+    int k0 = 1;
+    int k1 = 5;
+    int p0 = 0;
+    int p1 = 2;
+
     struct Conv2d convz1;
     struct Conv2d convr1;
     struct Conv2d convq1;
@@ -77,44 +68,44 @@ struct SepConvGRU {
     void create_weight_tensors(struct ggml_context* ctx) {
         convz1.in_channels = 384;
         convz1.out_channels = 128;
-        convz1.kernel_size = {1, 5};
+        convz1.kernel_size = {k0, k1};
         convz1.stride = { 1, 1 };
-        convz1.padding = { 0, 2 };
+        convz1.padding = { p0, p1 };
         convz1.create_weight_tensors(ctx);
 
         convr1.in_channels = 384;
         convr1.out_channels = 128;
-        convr1.kernel_size = {1, 5};
+        convr1.kernel_size = {k0, k1};
         convr1.stride = { 1, 1 };
-        convr1.padding = { 0, 2 };
+        convr1.padding = { p0, p1 };
         convr1.create_weight_tensors(ctx);
 
         convq1.in_channels = 384;
         convq1.out_channels = 128;
-        convq1.kernel_size = {1, 5};
+        convq1.kernel_size = {k0, k1};
         convq1.stride = { 1, 1 };
-        convq1.padding = { 0, 2 };
+        convq1.padding = { p0, p1 };
         convq1.create_weight_tensors(ctx);
 
         convz2.in_channels = 384;
         convz2.out_channels = 128;
-        convz2.kernel_size = {5, 1};
+        convz2.kernel_size = {k1, k0};
         convz2.stride = { 1, 1 };
-        convz2.padding = { 2, 0 };
+        convz2.padding = { p1, p0 };
         convz2.create_weight_tensors(ctx);
 
         convr2.in_channels = 384;
         convr2.out_channels = 128;
-        convr2.kernel_size = {5, 1};
+        convr2.kernel_size = {k1, k0};
         convr2.stride = { 1, 1 };
-        convr2.padding = { 2, 0 };
+        convr2.padding = { p1, p0 };
         convr2.create_weight_tensors(ctx);
 
         convq2.in_channels = 384;
         convq2.out_channels = 128;
-        convq2.kernel_size = {5, 1};
+        convq2.kernel_size = {k1, k0};
         convq2.stride = { 1, 1 };
-        convq2.padding = { 2, 0 };
+        convq2.padding = { p1, p0 };
         convq2.create_weight_tensors(ctx);
     }
 
@@ -137,65 +128,64 @@ struct SepConvGRU {
     }
 
     ggml_tensor_t* forward(struct ggml_context* ctx, ggml_tensor_t* h, ggml_tensor_t* x) {
-        // # horizontal
+
+        ggml_tensor_t *hx, *z, *r, *rh, *q, *one_z;
         // hx = torch.cat([h, x], dim=1)
         // z = torch.sigmoid(self.convz1(hx))
         // r = torch.sigmoid(self.convr1(hx))
         // q = torch.tanh(self.convq1(torch.cat([r * h, x], dim=1)))
         // h = (1 - z) * h + z * q
 
-        // # vertical
-        // hx = torch.cat([h, x], dim=1)
-        // z = torch.sigmoid(self.convz2(hx))
-        // r = torch.sigmoid(self.convr2(hx))
-        // q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
-        // h = (1 - z) * h + z * q
-        // # tensor [h] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: 0.046477
-
-        // return h
-
-        ggml_tensor_t *hx, *z, *r, *rh, *q, *one_z;
-
         // # horizontal
-         hx = ggml_concat(ctx, h, x, 2 /*dim on channel*/);
+        hx = ggml_concat(ctx, h, x, 2 /*dim on channel*/);
         z = ggml_sigmoid(ctx, convz1.forward(ctx, hx));
-        one_z = ggml_dup(ctx, z);
-        one_z = ggml_constant(ctx, one_z, 1.0);
-        one_z = ggml_sub(ctx, one_z, z);
         r = ggml_sigmoid(ctx, convr1.forward(ctx, hx));
         // q
         rh = ggml_mul(ctx, r, h);
         rh = ggml_concat(ctx, rh, x, 2 /*dim on channel*/);
         q = ggml_tanh(ctx, convq1.forward(ctx, rh));
+
+        one_z = ggml_dup(ctx, z);
+        // one_z = ggml_constant(ctx, one_z, 1.0);
+        one_z = ggml_clamp(ctx, one_z, 1.0f, 1.0f);
+        one_z = ggml_sub(ctx, one_z, z);
         h = ggml_add(ctx, ggml_mul(ctx, one_z, h), ggml_mul(ctx, z, q));
+
+        // hx = torch.cat([h, x], dim=1)
+        // z = torch.sigmoid(self.convz2(hx))
+        // r = torch.sigmoid(self.convr2(hx))
+        // q = torch.tanh(self.convq2(torch.cat([r * h, x], dim=1)))
+        // h = (1 - z) * h + z * q
 
         // # vertical
         hx = ggml_concat(ctx, h, x, 2 /*dim on channel*/);
         z = ggml_sigmoid(ctx, convz2.forward(ctx, hx));
-        one_z = ggml_constant(ctx, one_z, 1.0);
-        one_z = ggml_sub(ctx, one_z, z);
         r = ggml_sigmoid(ctx, convr2.forward(ctx, hx));
         // q
         rh = ggml_mul(ctx, r, h);
         rh = ggml_concat(ctx, rh, x, 2 /*dim on channel*/);
         q = ggml_tanh(ctx, convq2.forward(ctx, rh));
+        one_z = ggml_dup(ctx, z);
+        // one_z = ggml_constant(ctx, one_z, 1.0);
+        one_z = ggml_clamp(ctx, one_z, 1.0f, 1.0f);
+        one_z = ggml_sub(ctx, one_z, z);
         h = ggml_add(ctx, ggml_mul(ctx, one_z, h), ggml_mul(ctx, z, q));
+
+        // {
+        //     h = ggml_cont(ctx, h);
+        //     ggml_set_name(h, "FlowHead");
+        //     ggml_set_output(h);
+
+        //     // min: -1.0000, max: 1.0000, mean: 0.0544
+        //     // tensor [FlowHead] size: [1, 128, 55, 128], min: -0.999999, max: 0.999992, mean: 0.053224
+        // }
 
     	return h;
     }
 };
 
-/*
- MotionEncoder(
-  (convc1): Conv2d(324, 256, kernel_size=(1, 1), stride=(1, 1))
-  (convc2): Conv2d(256, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  (convf1): Conv2d(2, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3))
-  (convf2): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  (conv): Conv2d(256, 126, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-) */
-
+// -----------------------------------------------------------
 struct MotionEncoder {
-    // network params
     struct Conv2d convc1;
     struct Conv2d convc2;
     struct Conv2d convf1;
@@ -269,7 +259,6 @@ struct MotionEncoder {
 
         // # tensor [motion_feat] size: [1, 128, 55, 128], min: -1.508427, max: 6.19675, mean: 0.129374
         // return motion_feat
-
         ggml_tensor_t *cor;
         cor = convc1.forward(ctx, corr);
         cor = ggml_relu(ctx, cor);
@@ -290,41 +279,21 @@ struct MotionEncoder {
         ggml_tensor_t *motion_feat;
         motion_feat = ggml_concat(ctx, cor_flo, flow, 2/*dim on channel*/);
 
+        // {
+        //     motion_feat = ggml_cont(ctx, motion_feat);
+        //     ggml_set_name(motion_feat, "FlowHead");
+        //     ggml_set_output(motion_feat);
+
+        //     // Info: ********************** FlowHead Tensor: 1x128x55x128
+        //     // min: 0.0000, max: 3.0222, mean: 0.0727
+        //     // tensor [FlowHead] size: [1, 128, 55, 128], min: 0.0, max: 3.024535, mean: 0.072592
+        // }
+
         return motion_feat;
     }
 };
 
-/*
- BasicUpdateBlock(
-  (encoder): MotionEncoder(
-    (convc1): Conv2d(324, 256, kernel_size=(1, 1), stride=(1, 1))
-    (convc2): Conv2d(256, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (convf1): Conv2d(2, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3))
-    (convf2): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (conv): Conv2d(256, 126, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  )
-  (gru): SepConvGRU(
-    (convz1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-    (convr1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-    (convq1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-    (convz2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-    (convr2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-    (convq2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-  )
-  (flow_head): FlowHead(
-    (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (conv2): Conv2d(256, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (relu): ReLU()
-  )
-  (mask): Sequential(
-    (0): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    (1): ReLU()
-    (2): Conv2d(256, 576, kernel_size=(1, 1), stride=(1, 1))
-  )
-) */
-
 struct BasicUpdateBlock {
-    // network params
     struct MotionEncoder encoder;
     struct SepConvGRU gru;
     struct FlowHead flow_head;
@@ -378,86 +347,23 @@ struct BasicUpdateBlock {
     //     # scale mask to balence gradients
     //     mask = 0.25 * self.mask(net)
     //     return net, mask, delta_flow
-    std::vector<ggml_tensor_t *> forward(struct ggml_context* ctx, ggml_tensor_t* net, ggml_tensor_t* inp,
-        ggml_tensor_t* corr, ggml_tensor_t* flow) {
+    std::vector<ggml_tensor_t *> forward(struct ggml_context* ctx, 
+        ggml_tensor_t* net, ggml_tensor_t* inp, ggml_tensor_t* corr, ggml_tensor_t* flow) {
         // tensor [net] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: -0.000222
         // tensor [inp] size: [1, 128, 55, 128], min: 0.0, max: 5.488075, mean: 0.038178
         // tensor [corr] size: [1, 324, 55, 128], min: -5.405947, max: 25.431339, mean: 0.233413
         // tensor [flow] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
 
         std::vector<ggml_tensor_t *> xlist;
-
-        // flow = ggml_cont(ctx, flow);
-        // ggml_set_name(flow, "flow");
-        // ggml_set_output(flow);
-
-        // corr = ggml_cont(ctx, corr);
-        // ggml_set_name(corr, "corr");
-        // ggml_set_output(corr);
-
         ggml_tensor_t *motion_feat = encoder.forward(ctx, flow, corr);
-
-        // motion_feat = ggml_cont(ctx, motion_feat);
-        // ggml_set_name(motion_feat, "motion_feat");
-        // ggml_set_output(motion_feat);
-
-
-        // Info: ********************** flow Tensor: 1x2x55x128
-        // min: -690.0397, max: 727.3568, mean: -2.0973
-        // Info: ********************** corr Tensor: 1x324x55x128
-        // min: -3.6457, max: 12.8752, mean: 0.0917
-        // Info: ********************** motion_feat Tensor: 1x128x55x128
-        // min: -690.0397, max: 727.3568, mean: 3.2731
-
-
-
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: 0.0, max: 27.771051, mean: 0.248971
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.231163, max: 6.667092, mean: 0.124499
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.213821, max: 6.57347, mean: 0.122071
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.196342, max: 8.667865, mean: 0.124009
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.202042, max: 6.649434, mean: 0.124851
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.202976, max: 6.519124, mean: 0.125014
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.212376, max: 6.62364, mean: 0.125172
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.224716, max: 6.26437, mean: 0.125271
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.247585, max: 6.365556, mean: 0.125302
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.254894, max: 6.342296, mean: 0.125405
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.249577, max: 6.391676, mean: 0.125365
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.245121, max: 6.396429, mean: 0.125442
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.240402, max: 6.534332, mean: 0.125424
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.240623, max: 6.446226, mean: 0.125442
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.232243, max: 6.580369, mean: 0.1254
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.232037, max: 6.420638, mean: 0.125458
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.230373, max: 6.605807, mean: 0.125387
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.22847, max: 6.440721, mean: 0.125446
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.227055, max: 6.571367, mean: 0.125326
-        // tensor [motion_feat] size: [1, 128, 55, 128], min: -1.224991, max: 6.451536, mean: 0.125444
-
-
 
         inp = ggml_concat(ctx, inp, motion_feat, 2 /*dim on channe*/);
         net = gru.forward(ctx, net, inp);
 
-        // net = ggml_cont(ctx, net);
-        // ggml_set_name(net, "gru");
-        // ggml_set_output(net);
-
-
         ggml_tensor_t *delta_flow = flow_head.forward(ctx, net);
 
-        // delta_flow = ggml_cont(ctx, delta_flow);
-        // ggml_set_name(delta_flow, "flow_head");
-        // ggml_set_output(delta_flow);
-
-
-        // Info: ********************** motion_feat Tensor: 1x128x55x128
-        // min: -690.0397, max: 727.3568, mean: 3.2731
-        // Info: ********************** gru Tensor: 1x128x55x128
-        // min: -20.5265, max: 20.8681, mean: -0.0055
-        // Info: ********************** flow_head Tensor: 1x2x55x128
-        // min: -94.1873, max: 91.4377, mean: -4.3792
-
-
-
+        // # scale mask to balence gradients
+        // mask = 0.25 * self.mask(net)
         ggml_tensor_t *mask;
         mask = mask_0.forward(ctx, net);
         mask = ggml_relu(ctx, mask);
@@ -472,15 +378,6 @@ struct BasicUpdateBlock {
     }
 };
 
-/*
- ResidualBlock(
-  (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-  (relu): ReLU(inplace=True)
-  (norm1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-  (norm2): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-  (downsample): Identity()
-) */
 
 // ResidualBlock
 struct BatchResidualBlock {
@@ -499,9 +396,6 @@ struct BatchResidualBlock {
     struct BatchNorm2d downsample_norm;
 
     void create_weight_tensors(struct ggml_context* ctx) {
-        // self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=3, padding=1, stride=stride)
-        // self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1)
-
         conv1.in_channels = in_planes;
         conv1.out_channels = planes;
         conv1.kernel_size = {3, 3};
@@ -542,13 +436,11 @@ struct BatchResidualBlock {
 
         snprintf(s, sizeof(s), "%s%s", prefix, "conv1.");
         conv1.setup_weight_names(s);
-
         snprintf(s, sizeof(s), "%s%s", prefix, "conv2.");
         conv2.setup_weight_names(s);
 
         snprintf(s, sizeof(s), "%s%s", prefix, "norm1.");
         norm1.setup_weight_names(s);
-
         snprintf(s, sizeof(s), "%s%s", prefix, "norm2.");
         norm2.setup_weight_names(s);
 
@@ -556,7 +448,6 @@ struct BatchResidualBlock {
              // for downsample ...
             snprintf(s, sizeof(s), "%s%s", prefix, "downsample.0.");
             downsample_conv.setup_weight_names(s);
-
             snprintf(s, sizeof(s), "%s%s", prefix, "downsample.1.");
             downsample_norm.setup_weight_names(s);
         }
@@ -568,8 +459,6 @@ struct BatchResidualBlock {
         // y = self.relu(self.norm2(self.conv2(y)))
         // x = self.downsample(x)
         // return self.relu(x + y)
-
-        // x = ggml_nn_arange(ctx, x);
 
         ggml_tensor_t *y = x;
         y = conv1.forward(ctx, y);
@@ -583,7 +472,6 @@ struct BatchResidualBlock {
             x = downsample_norm.forward(ctx, x);
         }
         x = ggml_relu(ctx, ggml_add(ctx, x, y));
-
 
     	return x;
     }
@@ -650,13 +538,11 @@ struct InstanceResidualBlock {
 
         snprintf(s, sizeof(s), "%s%s", prefix, "conv1.");
         conv1.setup_weight_names(s);
-
         snprintf(s, sizeof(s), "%s%s", prefix, "conv2.");
         conv2.setup_weight_names(s);
 
         snprintf(s, sizeof(s), "%s%s", prefix, "norm1.");
         norm1.setup_weight_names(s);
-
         snprintf(s, sizeof(s), "%s%s", prefix, "norm2.");
         norm2.setup_weight_names(s);
 
@@ -664,7 +550,6 @@ struct InstanceResidualBlock {
             // for downsample ...
             snprintf(s, sizeof(s), "%s%s", prefix, "downsample.0.");
             downsample_conv.setup_weight_names(s);
-
             snprintf(s, sizeof(s), "%s%s", prefix, "downsample.1.");
             downsample_norm.setup_weight_names(s);
         }
@@ -687,91 +572,14 @@ struct InstanceResidualBlock {
             x = downsample_conv.forward(ctx, x);
             x = downsample_norm.forward(ctx, x);
         }
-        x = ggml_relu(ctx,  ggml_add(ctx, x, y));
-
-        // Info: ********************** InstanceResidualBlock Tensor: 2x128x55x128
-        // min: 0.0000, max: 11.3031, mean: 0.7551
-
-        // tensor [ResidualBlock] size: [2, 128, 55, 128], min: 1e-06, max: 11.252819, mean: 0.755113
+        x = ggml_relu(ctx,  ggml_add(ctx, x, y)); // self.relu(x + y)
 
         return x;
     }
 };
 
-
-/*
- BasicEncoder(
-  (norm1): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-  (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
-  (relu1): ReLU(inplace=True)
-  (layer1): Sequential(
-    (0): BatchResidualBlock(
-      (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU(inplace=True)
-      (norm1): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm2): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (downsample): Identity()
-    )
-    (1): BatchResidualBlock(
-      (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU(inplace=True)
-      (norm1): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm2): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (downsample): Identity()
-    )
-  )
-  (layer2): Sequential(
-    (0): BatchResidualBlock(
-      (conv1): Conv2d(64, 96, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-      (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU(inplace=True)
-      (norm1): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm2): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm3): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (downsample): Sequential(
-        (0): Conv2d(64, 96, kernel_size=(1, 1), stride=(2, 2))
-        (1): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      )
-    )
-    (1): BatchResidualBlock(
-      (conv1): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU(inplace=True)
-      (norm1): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm2): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (downsample): Identity()
-    )
-  )
-  (layer3): Sequential(
-    (0): BatchResidualBlock(
-      (conv1): Conv2d(96, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-      (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU(inplace=True)
-      (norm1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm2): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm3): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (downsample): Sequential(
-        (0): Conv2d(96, 128, kernel_size=(1, 1), stride=(2, 2))
-        (1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      )
-    )
-    (1): BatchResidualBlock(
-      (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU(inplace=True)
-      (norm1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (norm2): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-      (downsample): Identity()
-    )
-  )
-  (conv2): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1))
-) */
-
 // BasicEncoder
 struct BatchBasicEncoder {
-    // network params
     struct BatchNorm2d norm1;
 
     struct Conv2d conv1;
@@ -797,10 +605,6 @@ struct BatchBasicEncoder {
         conv1.padding = { 3, 3 };
         conv1.create_weight_tensors(ctx);
 
-        // layer1 = ResidualBlock(self.in_planes, dim, self.norm_fn, stride=stride)
-        // layer2 = ResidualBlock(dim, dim, self.norm_fn, stride=1)
-        // self.layer1 = self._make_layer(64, stride=1)
-
         layer1_0.in_planes = 64;
         layer1_0.planes = 64;
         layer1_0.stride = 1;
@@ -810,28 +614,6 @@ struct BatchBasicEncoder {
         layer1_1.planes = 64;
         layer1_1.stride = 1;
         layer1_1.create_weight_tensors(ctx);
-
-
-        // ResidualBlock(
-        //   (conv1): Conv2d(64, 96, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-        //   (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        //   (relu): ReLU(inplace=True)
-        //   (norm1): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        //   (norm2): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        //   (norm3): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        //   (downsample): Sequential(
-        //     (0): Conv2d(64, 96, kernel_size=(1, 1), stride=(2, 2))
-        //     (1): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        //   )
-        // )
-        // ResidualBlock(
-        //   (conv1): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        //   (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        //   (relu): ReLU(inplace=True)
-        //   (norm1): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        //   (norm2): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        //   (downsample): Identity()
-        // )
 
         // self.layer2 = self._make_layer(96, stride=2)
         layer2_0.in_planes = 64;
@@ -902,7 +684,6 @@ struct BatchBasicEncoder {
         // x = self.conv2(x)
         // return x
 
-        // x = ggml_nn_arange(ctx, x);
         x = conv1.forward(ctx, x);
         x = norm1.forward(ctx, x);
         x = ggml_relu(ctx, x);
@@ -915,18 +696,12 @@ struct BatchBasicEncoder {
         x = layer3_1.forward(ctx, x);
 
         x = conv2.forward(ctx, x);
-
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "BatchBasicEncoder");
-        // ggml_set_output(x);
-
     	return x;
     }
 };
 
 // BasicEncoder
 struct InstanceBasicEncoder {
-    // network params
     struct InstanceNorm2d norm1;
 
     struct Conv2d conv1;
@@ -952,14 +727,6 @@ struct InstanceBasicEncoder {
         conv1.padding = { 3, 3 };
         conv1.create_weight_tensors(ctx);
 
-        // layer1 = ResidualBlock(self.in_planes, dim, self.norm_fn, stride=stride)
-        // layer2 = ResidualBlock(dim, dim, self.norm_fn, stride=1)
-        // self.layer1 = self._make_layer(64, stride=1)
-
-        // _make_layer:
-        // 64 64 batch 1
-        // 64 64 batch 1
-        // --------------------------------------------------------------------------------
         layer1_0.in_planes = 64;
         layer1_0.planes = 64;
         layer1_0.stride = 1;
@@ -970,11 +737,6 @@ struct InstanceBasicEncoder {
         layer1_1.stride = 1;
         layer1_1.create_weight_tensors(ctx);
 
-        // _make_layer:
-        // 64 96 batch 2
-        // 96 96 batch 2
-        // --------------------------------------------------------------------------------
-        // self.layer2 = self._make_layer(96, stride=2)
         layer2_0.in_planes = 64;
         layer2_0.planes = 96;
         layer2_0.stride = 2;
@@ -985,11 +747,6 @@ struct InstanceBasicEncoder {
         layer2_1.stride = 1;
         layer2_1.create_weight_tensors(ctx);
 
-        // self.layer3 = self._make_layer(128, stride=2)
-        // _make_layer:
-        // 96 128 batch 2
-        // 128 128 batch 2
-        // --------------------------------------------------------------------------------
         layer3_0.in_planes = 96;
         layer3_0.planes = 128;
         layer3_0.stride = 2;
@@ -1000,7 +757,6 @@ struct InstanceBasicEncoder {
         layer3_1.stride = 1;
         layer3_1.create_weight_tensors(ctx);
 
-        // self.conv2 = nn.Conv2d(128, 256, kernel_size=1)
         conv2.in_channels = 128;
         conv2.out_channels = 256;
         conv2.kernel_size = {1, 1};
@@ -1046,258 +802,26 @@ struct InstanceBasicEncoder {
 
         // x = self.conv2(x)
         // return x
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x1");
-        // ggml_set_output(x);
-
         x = conv1.forward(ctx, x);
-
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x2");
-        // ggml_set_output(x);
-
         x = norm1.forward(ctx, x);
-
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x3");
-        // ggml_set_output(x);
-
-
         x = ggml_relu(ctx, x);
 
         x = layer1_0.forward(ctx, x);
         x = layer1_1.forward(ctx, x);
 
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x4");
-        // ggml_set_output(x);
-
         x = layer2_0.forward(ctx, x);
         x = layer2_1.forward(ctx, x);
-
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x5");
-        // ggml_set_output(x);
 
         x = layer3_0.forward(ctx, x);
         x = layer3_1.forward(ctx, x);
 
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x6");
-        // ggml_set_output(x);
-
         x = conv2.forward(ctx, x);
 
-        // x = ggml_cont(ctx, x);
-        // ggml_set_name(x, "x7");
-        // ggml_set_output(x);
-
-
-
-        // Info: ********************** images Tensor: 2x3x440x1024
-        // min: -1.0000, max: 1.0000, mean: -0.2467
-
-        // Info: ********************** x1 Tensor: 2x3x440x1024
-        // min: -1.0000, max: 1.0000, mean: -0.2467
-        // Info: ********************** x2 Tensor: 2x64x220x512
-        // min: -7.5185, max: 7.8995, mean: 0.0257
-        // Info: ********************** x3 Tensor: 2x64x220x512
-        // min: -13.4140, max: 12.1434, mean: 0.0000
-
-        // Info: ********************** x4 Tensor: 2x64x220x512
-        // min: 0.0000, max: 25.7299, mean: 1.0922
-
-        // Info: ********************** x5 Tensor: 2x96x110x256
-        // min: 0.0000, max: 14.1641, mean: 1.0558
-
-        // Info: ********************** x6 Tensor: 2x128x55x128
-        // min: 0.0000, max: 11.4655, mean: 1.1087
-
-        // Info: ********************** x7 Tensor: 2x256x55x128
-        // min: -4.4848, max: 4.7935, mean: 0.0030
-
-
-        // tensor [x1] size: [2, 3, 440, 1024], min: -1.0, max: 1.0, mean: -0.245923
-        // tensor [x2] size: [2, 64, 220, 512], min: -7.565556, max: 7.899763, mean: 0.025623
-        // tensor [x3] size: [2, 64, 220, 512], min: -13.541551, max: 13.151362, mean: 0.0
-        // tensor [x4] size: [2, 64, 220, 512], min: 0.0, max: 25.720057, mean: 1.092221
-        // tensor [x5] size: [2, 96, 110, 256], min: 0.0, max: 14.151134, mean: 1.055869
-        // tensor [x6] size: [2, 128, 55, 128], min: 0.0, max: 11.478568, mean: 1.108787
-        // tensor [x7] size: [2, 256, 55, 128], min: -4.488491, max: 5.076661, mean: 0.003168
         return x;
     }
 };
 
-
-/*
- RAFT(
-  (cnet): BasicEncoder(
-    (norm1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-    (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
-    (relu1): ReLU(inplace=True)
-    (layer1): Sequential(
-      (0): BatchResidualBlock(
-        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (downsample): Identity()
-      )
-      (1): BatchResidualBlock(
-        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm2): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (downsample): Identity()
-      )
-    )
-    (layer2): Sequential(
-      (0): BatchResidualBlock(
-        (conv1): Conv2d(64, 96, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-        (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm2): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm3): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (downsample): Sequential(
-          (0): Conv2d(64, 96, kernel_size=(1, 1), stride=(2, 2))
-          (1): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        )
-      )
-      (1): BatchResidualBlock(
-        (conv1): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm2): BatchNorm2d(96, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (downsample): Identity()
-      )
-    )
-    (layer3): Sequential(
-      (0): BatchResidualBlock(
-        (conv1): Conv2d(96, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm3): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (downsample): Sequential(
-          (0): Conv2d(96, 128, kernel_size=(1, 1), stride=(2, 2))
-          (1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        )
-      )
-      (1): BatchResidualBlock(
-        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (norm2): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
-        (downsample): Identity()
-      )
-    )
-    (conv2): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1))
-  )
-  (fnet): BasicEncoder(
-    (norm1): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-    (conv1): Conv2d(3, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3))
-    (relu1): ReLU(inplace=True)
-    (layer1): Sequential(
-      (0): BatchResidualBlock(
-        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm2): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (downsample): Identity()
-      )
-      (1): BatchResidualBlock(
-        (conv1): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(64, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm2): InstanceNorm2d(64, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (downsample): Identity()
-      )
-    )
-    (layer2): Sequential(
-      (0): BatchResidualBlock(
-        (conv1): Conv2d(64, 96, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-        (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm2): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm3): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (downsample): Sequential(
-          (0): Conv2d(64, 96, kernel_size=(1, 1), stride=(2, 2))
-          (1): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        )
-      )
-      (1): BatchResidualBlock(
-        (conv1): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(96, 96, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm2): InstanceNorm2d(96, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (downsample): Identity()
-      )
-    )
-    (layer3): Sequential(
-      (0): BatchResidualBlock(
-        (conv1): Conv2d(96, 128, kernel_size=(3, 3), stride=(2, 2), padding=(1, 1))
-        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm2): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm3): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (downsample): Sequential(
-          (0): Conv2d(96, 128, kernel_size=(1, 1), stride=(2, 2))
-          (1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        )
-      )
-      (1): BatchResidualBlock(
-        (conv1): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (conv2): Conv2d(128, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-        (relu): ReLU(inplace=True)
-        (norm1): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (norm2): InstanceNorm2d(128, eps=1e-05, momentum=0.1, affine=False, track_running_stats=False)
-        (downsample): Identity()
-      )
-    )
-    (conv2): Conv2d(128, 256, kernel_size=(1, 1), stride=(1, 1))
-  )
-  (update_block): BasicUpdateBlock(
-    (encoder): MotionEncoder(
-      (convc1): Conv2d(324, 256, kernel_size=(1, 1), stride=(1, 1))
-      (convc2): Conv2d(256, 192, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (convf1): Conv2d(2, 128, kernel_size=(7, 7), stride=(1, 1), padding=(3, 3))
-      (convf2): Conv2d(128, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (conv): Conv2d(256, 126, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-    )
-    (gru): SepConvGRU(
-      (convz1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-      (convr1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-      (convq1): Conv2d(384, 128, kernel_size=(1, 5), stride=(1, 1), padding=(0, 2))
-      (convz2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-      (convr2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-      (convq2): Conv2d(384, 128, kernel_size=(5, 1), stride=(1, 1), padding=(2, 0))
-    )
-    (flow_head): FlowHead(
-      (conv1): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (conv2): Conv2d(256, 2, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (relu): ReLU()
-    )
-    (mask): Sequential(
-      (0): Conv2d(128, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
-      (1): ReLU()
-      (2): Conv2d(256, 576, kernel_size=(1, 1), stride=(1, 1))
-    )
-  )
-) */
-
 struct RAFT : GGMLNetwork {
-    // network hparams
     int MAX_H = 1024;
     int MAX_W = 1024;
     int MAX_TIMES = 8;
@@ -1336,8 +860,6 @@ struct RAFT : GGMLNetwork {
     ggml_tensor_t* resize_pad(struct ggml_context* ctx, ggml_tensor_t* x) {
         int W = (int)x->ne[0];
         int H = (int)x->ne[1];
-        // int C = (int)x->ne[2];
-        // int B = (int)x->ne[3];
 
         if (H > MAX_H || W > MAX_W) { // need resize ?
             float s = (float)MAX_H/H;
@@ -1365,21 +887,6 @@ struct RAFT : GGMLNetwork {
         return x;
     }
 
-    // def bilinear_sampler(img, coords):
-    //     # img.size() -- [7040, 1, 55, 128]
-    //     # coords.size() -- [7040, 9, 9, 2]
-    //     B, C, H, W = img.size()
-    //     xgrid, ygrid = coords.split([1, 1], dim=3)
-
-    //     xgrid = 2.0 * xgrid / (W - 1.0) - 1.0
-    //     ygrid = 2.0 * ygrid / (H - 1.0) - 1.0
-
-    //     # xgrid.size() -- [7040, 9, 9, 1]
-    //     # ygrid.size() -- [7040, 9, 9, 1]
-    //     grid = torch.cat([xgrid, ygrid], dim=3)
-    //     img = F.grid_sample(img, grid, align_corners=True)
-
-    //     return img # img.size() -- [7040, 1, 9, 9]
     // ---------------------------------------------------------------------------------------------
     ggml_tensor_t* bilinear_sampler(struct ggml_context* ctx, ggml_tensor_t* image, ggml_tensor_t* coords) {
         // tensor [img] size: [7040, 1, 55, 128], min: -7.369149, max: 25.431339, mean: 0.033188
@@ -1395,52 +902,12 @@ struct RAFT : GGMLNetwork {
         mesh_y = ggml_scale(ctx, mesh_y, 2.0f/(H - 1.0f));
         mesh_y = ggml_add_constant(ctx, mesh_y, -1.0);
         ggml_tensor_t *grid = ggml_concat(ctx, mesh_x, mesh_y, 0/*dim on batch*/);
-        grid = ggml_clamp(ctx, grid, -1.0, 1.0); // meet ggml_grid_sample spec
 
+        grid = ggml_clamp(ctx, grid, -1.0, 1.0); // meet ggml_grid_sample spec !!!
         image = ggml_grid_sample(ctx, image, grid);
-        // image    f32 [9, 9, 1, 7040], 
 
-        {
-            grid = ggml_cont(ctx, grid);
-            ggml_set_name(grid, "grid");
-            ggml_set_output(grid);
-
-            image = ggml_cont(ctx, image);
-            ggml_set_name(image, "grid_sample");
-            ggml_set_output(image);
-
-            // Info: ********************** grid_sample Tensor: 7040x1x9x9
-            // min: 0.0000, max: 0.9999, mean: 0.4999
-
-        }
         return image; // f32 [9, 9, 1, 7040]
     }
-
-    // def create_corr_pyramid(fmap1, fmap2) -> List[torch.Tensor]:
-    //     # corr_levels: int, corr_radius: int === 4, 4
-    //     B, C, H, W = fmap1.shape  # (1, 256, 55, 128)
-    //     fmap1 = fmap1.view(B, C, H * W)
-    //     fmap2 = fmap2.view(B, C, H * W)
-
-    //     # C === 256 ==> torch.sqrt(torch.tensor(C).float()) === 16.0
-    //     # corr = torch.matmul(fmap1.transpose(1, 2), fmap2) / torch.sqrt(torch.tensor(C).float())
-    //     corr = torch.matmul(fmap1.transpose(1, 2), fmap2) / 16.0
-    //     # size() -- [1, 7040, 7040]
-    //     corr = corr.reshape(H * W, 1, H, W)  # ==> size() -- [7040, 1, 55, 128]
-
-    //     corr_pyramid = []
-    //     corr_pyramid.append(corr)
-    //     corr_levels = 4
-    //     for i in range(corr_levels - 1):
-    //         corr = F.avg_pool2d(corr, 2, stride=2)
-    //         corr_pyramid.append(corr)
-
-    //     # corr_pyramid is list: len = 4
-    //     #     tensor [item] size: [7040, 1, 55, 128], min: -7.369149, max: 25.431339, mean: 0.033188
-    //     #     tensor [item] size: [7040, 1, 27, 64], min: -3.66336, max: 9.582128, mean: 0.032375
-    //     #     tensor [item] size: [7040, 1, 13, 32], min: -2.107447, max: 4.198452, mean: 0.03262
-    //     #     tensor [item] size: [7040, 1, 6, 16], min: -1.357178, max: 2.21133, mean: 0.03297
-    //     return corr_pyramid
 
     std::vector<ggml_tensor_t *> create_corr_pyramid(struct ggml_context* ctx, ggml_tensor_t* fmap1, ggml_tensor_t* fmap2) {
         std::vector<ggml_tensor_t *> xlist;
@@ -1459,68 +926,27 @@ struct RAFT : GGMLNetwork {
 
         xlist.push_back(corr);
         for (int i = 0; i < 3; i++) {
-            corr = ggml_pool_2d(ctx, corr, GGML_OP_POOL_AVG, 
-                    2 /*kernel*/, 2/*kernel*/, 2 /*stride*/, 2/*stride*/, 0.0/*(float)padding*/, 0.0/*(float)padding*/);
+            corr = ggml_pool_2d(ctx, corr, GGML_OP_POOL_AVG, 2 /*k0*/, 2/*k1*/, 2 /*s0*/, 2/*s1*/, 0.0/*p0*/, 0.0/*p1*/);
             xlist.push_back(corr);
         }
 
+        // # xlist is list: len = 4
+        // #     tensor [item] size: [7040, 1, 55, 128], min: -7.369149, max: 25.431339, mean: 0.033188
+        // #     tensor [item] size: [7040, 1, 27, 64], min: -3.66336, max: 9.582128, mean: 0.032375
+        // #     tensor [item] size: [7040, 1, 13, 32], min: -2.107447, max: 4.198452, mean: 0.03262
+        // #     tensor [item] size: [7040, 1, 6, 16], min: -1.357178, max: 2.21133, mean: 0.03297
         return xlist;
     }
 
-
-    // def index_corr_volume(coords, corr_pyramid: List[torch.Tensor], mesh_grid_9x9):
-    //     # tensor [coords] size: [1, 2, 55, 128], min: 0.0, max: 127.0, mean: 45.25
-    //     coords = coords.permute(0, 2, 3, 1) # [1, 2, 55, 128] --> [1, 55, 128, 2]
-    //     # tensor [coords] size: [1, 55, 128, 2], min: 0.0, max: 127.0, mean: 45.25
-
-    //     B, H, W, N = coords.size()
-
-    //     out_pyramid = []
-    //     corr_levels = 4
-    //     for i in range(corr_levels): # 4 
-    //         centroid = coords.reshape(B*H*W, 1, 1, 2) / 2**i
-    //         corr = bilinear_sampler(corr_pyramid[i], centroid + mesh_grid_9x9).view(B, H, W, -1)
-    //         out_pyramid.append(corr)
-
-    //     out = torch.cat(out_pyramid, dim=3)  # [1, 55, 128, 324]
-    //     return out.permute(0, 3, 1, 2)  # [1, 324, 55, 128]
-
-    // xxxx_debug
-    // # coords.size() -- [1, 55, 128, 2]
-    // D, W, H, B = g_coords.contents.ne[:4]
-    // g_coords = ggml.ggml_reshape_4d(ctx, g_coords, 2, 1, 1, B*H*W)
-
-    // g_out_pyramid = [None, None, None, None]
-    // fscale = 1.0
-    // for i in range(4):
-    //     g_centroid = ggml.ggml_scale(ctx, g_coords, fscale)
-    //     fscale = fscale/2.0
-    //     g_centroid = ggml.ggml_repeat_ext(ctx, g_centroid, 1, 9, 9, 1)
-    //     # ggml_shape("g_centroid", g_centroid)
-    //     # ggml_shape("g_mesh_grid_9x9", g_mesh_grid_9x9)
-    //     g_centroid = ggml.ggml_add(ctx, g_centroid, g_mesh_grid_9x9)       
-    //     g_corr_pyramid = ggml_tensor(ctx, corr_pyramid[i]) 
-    //     g_corr = ggml_bilinear_sampler(ctx, g_corr_pyramid, g_centroid)
-    //     g_corr = ggml.ggml_reshape_4d(ctx, g_corr, -1, W, H, B)
-    //     g_out_pyramid[i] = g_corr
-    // g_out = ggml.ggml_concat(ctx, g_out_pyramid[0], g_out_pyramid[1], 0)
-    // g_out = ggml.ggml_concat(ctx, g_out, g_out_pyramid[2], 0)
-    // g_out = ggml.ggml_concat(ctx, g_out, g_out_pyramid[3], 0)
-    // g_out = ggml.ggml_permute(ctx, g_out, 2, 0, 1, 3) # [C, W, H, B] -> [W, H, C, B]
-    // g_out = ggml.ggml_cont(ctx, g_out)
-    
-
     ggml_tensor_t * index_corr_volume(struct ggml_context* ctx, ggml_tensor_t *coords, std::vector<ggml_tensor_t *>xlist) {
         ggml_tensor_t *centroid, *corr, *out_pyramid[4];
-
+        // # tensor [coords] size: [1, 2, 55, 128], min: 0.0, max: 127.0, mean: 45.25
         int W = (int)coords->ne[0];
         int H = (int)coords->ne[1];
         int D = (int)coords->ne[2];
         int B = (int)coords->ne[3];
-
         coords = ggml_cont(ctx, ggml_permute(ctx, coords, 1, 2, 0, 3)); // [W, H, 2, B] --> [2, W, H, B]
         coords = ggml_reshape_4d(ctx, coords, 2, 1, 1, B*H*W);
-
         // tensor [coords] size: [1, 55, 128, 2], min: 0.0, max: 127.0, mean: 45.25
         // tensor [mesh_grid_9x9] size: [1, 9, 9, 2], min: -4.0, max: 4.0, mean: 0.0
 
@@ -1532,68 +958,19 @@ struct RAFT : GGMLNetwork {
             // tensor [centroid] size: [7040, 1, 1, 2], min: 0.0, max: 15.875, mean: 5.65625
  
             corr = bilinear_sampler(ctx, xlist[i], centroid);
-            {
-                // centroid = ggml_cont(ctx, centroid);
-                // ggml_set_name(centroid, "centroid");
-                // ggml_set_output(centroid);
-
-                // corr = ggml_cont(ctx, corr);
-                // ggml_set_name(corr, "corr");
-                // ggml_set_output(corr);
-
-
-                // Info: ********************** centroid Tensor: 7040x9x9x2
-                // min: -4.0000, max: 19.8750, mean: 5.6562
-                // tensor [centroid] size: [7040, 9, 9, 2], min: -4.0, max: 19.875, mean: 5.65625
-            }
-
             corr = ggml_reshape_4d(ctx, corr, -1, W, H, B);
-
             out_pyramid[i] = corr;
         }
 
         ggml_tensor_t *out = ggml_cat(ctx, 4, out_pyramid[0], out_pyramid[1], out_pyramid[2], out_pyramid[3], 0/*dim*/);
-        // ggml_tensor_t *out = ggml_concat(ctx, out_pyramid[0], out_pyramid[1], 0);
-        // out = ggml_concat(ctx, out, out_pyramid[2], 0/*dim*/);
-        // out = ggml_concat(ctx, out, out_pyramid[3], 0/*dim*/);
-
         out = ggml_cont(ctx, ggml_permute(ctx, out, 2, 0, 1, 3)); // [C, W, H, B] -> [W, H, C, B]
-        // out    f32 [128, 55, 324, 1],  (permuted) (cont)
+        // tensor [out] size: [1, 324, 55, 128], min: -3.942287, max: 6.722563, mean: 0.003053
 
         // out = ggml_cont(ctx, out);
         // ggml_set_name(out, "grid_sample");
         // ggml_set_output(out);
-
-        // Info: ********************** grid_sample Tensor: 1x324x55x128
-        // min: -4.9216, max: 11.4533, mean: 0.0976
-
-        // tensor [out] size: [1, 324, 55, 128], min: -3.942287, max: 6.722563, mean: 0.003053
-
         return out;
     }
-
-    // def upsample_flow(self, flow, mask):
-    //     """Upsample flow field [H/8, W/8, 2] -> [H, W, 2] using convex combination"""
-
-    //     # tensor [flow] size: [1, 2, 55, 128], min: -1.231163, max: 1.291382, mean: -0.110575
-    //     # tensor [mask] size: [1, 576, 55, 128], min: -18.799122, max: 9.778274, mean: -0.933968
-    //     N, _, H, W = flow.shape # [1, 2, 55, 128
-
-    //     # ggml_debug
-    //     # tensor [flow] size: [1, 2, 55, 128], min: -1.231163, max: 1.291382, mean: -0.110575
-    //     up_flow = F.unfold(8 * flow, [3, 3], padding=1)
-    //     # tensor [up_flow] size: [1, 18, 7040], min: -9.849304, max: 10.331055, mean: -0.872977
-
-    //     # ggml_debug
-    //     mask2 = mask.view(1, 9, 64, H*W)
-    //     mask2 = torch.softmax(mask2, dim=1)
-    //     up_flow2 = up_flow.view(2, 9, 1, H*W)
-    //     up_flow2 = torch.sum(mask2 * up_flow2, dim=1)
-    //     # ==> up_flow2 -- [2, 64, H*W] -> [2, 64, H, W] --> pixel_shuffle --> [2, 1, 8*H, 8*W] --> [1, 2, 8*H, 8*W]
-    //     up_flow2 = F.pixel_shuffle(up_flow2.view(2, 64, H, W), 8)
-    //     # up_flow2 = up_flow2.permute(1, 0, 2, 3)
-    //     return up_flow2.reshape(N, 2, 8 * H, 8 * W)
-
 
     ggml_tensor_t* upsample_flow(ggml_context_t* ctx, ggml_tensor_t *flow, ggml_tensor_t *mask) {
         int B = (int)flow->ne[3];
@@ -1603,18 +980,19 @@ struct RAFT : GGMLNetwork {
         // flow    f32 [128, 55, 2, 1], 
 
         ggml_tensor_t *up_flow;
-        up_flow = ggml_nn_unfold(ctx, flow, 3 /*k0*/, 3 /*k1*/,
-                1 /*s0*/, 1/*s1*/, 1/*p0*/, 1/*p1*/, 1/*d0*/, 1/*d1*/);
+        flow = ggml_scale(ctx, flow, 8.0);
+        up_flow = ggml_nn_unfold(ctx, flow, 3 /*k0*/, 3 /*k1*/, 1 /*s0*/, 1/*s1*/, 1/*p0*/, 1/*p1*/, 1/*d0*/, 1/*d1*/);
         // [128*55, 18, 1]
 
-
-        up_flow = ggml_reshape_4d(ctx, up_flow, H*W, 1, 9, 2);
         mask = ggml_reshape_4d(ctx, mask, H*W, 64, 9, 1);
         mask = ggml_softmax(ctx, mask, 2 /*dim*/);
         mask = ggml_repeat_ext(ctx, mask, 1, 1, 1, 2);
-        up_flow = ggml_repeat_ext(ctx, up_flow, 1, 64, 1, 1);
-        up_flow = ggml_mul(ctx, mask, up_flow);
 
+        up_flow = ggml_reshape_4d(ctx, up_flow, H*W, 1, 9, 2);
+        up_flow = ggml_repeat_ext(ctx, up_flow, 1, 64, 1, 1);
+        up_flow = ggml_mul(ctx, mask, up_flow); // mask * up_flow
+
+        // up_flow = torch.sum(mask * up_flow, dim=1)
         up_flow = ggml_mean_ext(ctx, up_flow, 2 /*dim*/);
         up_flow = ggml_scale(ctx, up_flow, 9.0f);
 
@@ -1626,6 +1004,7 @@ struct RAFT : GGMLNetwork {
     }
 
     ggml_tensor_t* forward(ggml_context_t* ctx, int argc, ggml_tensor_t* argv[]) {
+        int W, H, C, B;
         std::vector<ggml_tensor_t *>xlist;
         ggml_tensor_t *image1, *image2, *up_mask, *m, *coords0, *coords1, *net, *inp;
 
@@ -1635,18 +1014,24 @@ struct RAFT : GGMLNetwork {
 
         mesh_grid_9x9 = ggml_cont(ctx, ggml_permute(ctx, mesh_grid_9x9, 3, 1, 2, 0)); // [2, 9, 9, 1] -> [1, 9, 9, 2]
 
-        image1 = resize_pad(ctx, image1);
-        image2 = resize_pad(ctx, image2);
-        int W = (int)image1->ne[0];
-        int H = (int)image1->ne[1];
-        int C = (int)image1->ne[2];
-        int B = (int)image1->ne[3];
+        {
+            // image1 = self.resize_pad(image1)
+            // image2 = self.resize_pad(image2)
+            // image1 = 2 * image1 - 1.0
+            // image2 = 2 * image2 - 1.0
+            image1 = resize_pad(ctx, image1);
+            image2 = resize_pad(ctx, image2);
+            W = (int)image1->ne[0];
+            H = (int)image1->ne[1];
+            C = (int)image1->ne[2];
+            B = (int)image1->ne[3];
 
-        image1 = ggml_scale(ctx, image1, 2.0);
-        image1 = ggml_add_constant(ctx, image1, -1.0);
+            image1 = ggml_scale(ctx, image1, 2.0);
+            image1 = ggml_add_constant(ctx, image1, -1.0);
 
-        image2 = ggml_scale(ctx, image2, 2.0);
-        image2 = ggml_add_constant(ctx, image2, -1.0);
+            image2 = ggml_scale(ctx, image2, 2.0);
+            image2 = ggml_add_constant(ctx, image2, -1.0);
+        }
 
         {
             ggml_tensor_t *images, *fmaps, *fmap1, *fmap2;
@@ -1656,51 +1041,20 @@ struct RAFT : GGMLNetwork {
             fmap1 = ggml_nn_slice(ctx, fmaps, 3/*dim*/, 0/*start*/, 1/*stop*/, 1/*step*/);
             fmap2 = ggml_nn_slice(ctx, fmaps, 3/*dim*/, 1/*start*/, 2/*stop*/, 1/*step*/);
             xlist = create_corr_pyramid(ctx, fmap1, fmap2);
-
-            // xlist[0] = ggml_cont(ctx, xlist[0]);
-            // ggml_set_name(xlist[0], "xlist0");
-            // ggml_set_output(xlist[0]);
-
-            // xlist[1] = ggml_cont(ctx, xlist[1]);
-            // ggml_set_name(xlist[1], "xlist1");
-            // ggml_set_output(xlist[1]);
-
-            // xlist[2] = ggml_cont(ctx, xlist[2]);
-            // ggml_set_name(xlist[2], "xlist2");
-            // ggml_set_output(xlist[2]);
-
-            // xlist[3] = ggml_cont(ctx, xlist[3]);
-            // ggml_set_name(xlist[3], "xlist3");
-            // ggml_set_output(xlist[3]);
-
-            // Info: ********************** xlist0 Tensor: 7040x1x55x128
-            // min: -7.3613, max: 25.4170, mean: 0.0332
-            // Info: ********************** xlist1 Tensor: 7040x1x27x64
-            // min: -3.6614, max: 9.5797, mean: 0.0324
-            // Info: ********************** xlist2 Tensor: 7040x1x13x32
-            // min: -2.1099, max: 4.1967, mean: 0.0327
-            // Info: ********************** xlist3 Tensor: 7040x1x6x16
-            // min: -1.3583, max: 2.2151, mean: 0.0330
-
-            // # corr_pyramid is list: len = 4
-            // #     tensor [item] size: [7040, 1, 55, 128], min: -7.369149, max: 25.431339, mean: 0.033188
-            // #     tensor [item] size: [7040, 1, 27, 64], min: -3.66336, max: 9.582128, mean: 0.032375
-            // #     tensor [item] size: [7040, 1, 13, 32], min: -2.107447, max: 4.198452, mean: 0.03262
-            // #     tensor [item] size: [7040, 1, 6, 16], min: -1.357178, max: 2.21133, mean: 0.03297
         }
 
         {
-            ggml_tensor_t *cnet_temp = cnet.forward(ctx, image1);
+            ggml_tensor_t *cnet_out = cnet.forward(ctx, image1);
 
-            int N = (int)cnet_temp->ne[2]/2;
-            net = ggml_nn_slice(ctx, cnet_temp, 2/*dim on channel*/, 0, N, 1/*step*/);
-            inp = ggml_nn_slice(ctx, cnet_temp, 2/*dim on channel*/, N, 2*N, 1/*step*/);
+            int N = (int)cnet_out->ne[2]/2;
+            net = ggml_nn_slice(ctx, cnet_out, 2/*dim on channel*/, 0, N, 1/*step*/);
+            inp = ggml_nn_slice(ctx, cnet_out, 2/*dim on channel*/, N, 2*N, 1/*step*/);
             net = ggml_tanh(ctx, net);
             inp = ggml_relu(ctx, inp);
 
-            // cnet_temp = ggml_cont(ctx, cnet_temp);
-            // ggml_set_name(cnet_temp, "cnet");
-            // ggml_set_output(cnet_temp);
+            // cnet_out = ggml_cont(ctx, cnet_out);
+            // ggml_set_name(cnet_out, "cnet");
+            // ggml_set_output(cnet_out);
 
             // net = ggml_cont(ctx, net);
             // ggml_set_name(net, "net");
@@ -1710,56 +1064,32 @@ struct RAFT : GGMLNetwork {
             // ggml_set_name(net, "inp");
             // ggml_set_output(inp);
 
-            // Info: -------------- net: 1x128x55x128
-            // min: -1.0000, max: 1.0000, mean: -0.0002
-            // # tensor [net] size: [1, 128, 55, 128], min: -1.0, max: 1.0, mean: -0.000222
-
-            // Info: -------------- inp: 1x128x55x128
-            // min: 0.0000, max: 5.4858, mean: 0.0382
-            // # tensor [inp] size: [1, 128, 55, 128], min: 0.0, max: 5.488075, mean: 0.038178
-
-            // Info: ********************** cnet Tensor: 1x256x55x128
-            // min: -17.8147, max: 14.0557, mean: -0.6495
             // # tensor [cnet] size: [1, 256, 55, 128], min: -17.80987, max: 14.065307, mean: -0.649572
         }
 
         coords0 = ggml_grid_mesh(ctx, B, H/8, W/8, 0/*norm*/);
+        coords0 = ggml_cont(ctx, ggml_permute(ctx, coords0, 2, 0, 1, 3)); // [2, W, H, B] --> [W, H, 2, B]
         coords1 = ggml_dup(ctx, coords0);
-
         // # tensor [coords0] size: [1, 2, 55, 128], min: 0.0, max: 127.0, mean: 45.25
+
         // --------------------------------------------------------------------------------------------------------
         {
-            // xxxx_debug
             ggml_tensor_t *corr, *delta_flow;
-
             std::vector<ggml_tensor_t *>ylist;
 
             m = ggml_sub(ctx, coords1, coords0);
-
-            corr = index_corr_volume(ctx, coords1, xlist);
-            // xxxx_debug
-            // corr = ggml_cont(ctx, corr);
-            // ggml_set_name(corr, "corr");
-            // ggml_set_output(corr);
-            // return corr;
-
-
-            for (int i = 0; i < 20; i++) {
+            for (int i = 0; i < 20; i++) { // xxxx_debug
                 corr = index_corr_volume(ctx, coords1, xlist);
-                // xxxx_debug
-                corr = ggml_cont(ctx, corr);
-                ggml_set_name(corr, "corr");
-                ggml_set_output(corr);
+                // tensor [corr] size: [1, 324, 55, 128], min: -4.747513, max: 24.461765, mean: 0.31686
 
-                // cpu
-                // Info: ********************** corr Tensor: 1x324x55x128
-                // min: -4.7117, max: 19.8750, mean: 1.1152
-                // cuda
-                // Info: ********************** corr Tensor: 1x324x55x128
-                // min: -4.7871, max: 25.4170, mean: 0.5577
+                // corr = ggml_cont(ctx, corr);
+                // ggml_set_name(corr, "corr");
+                // ggml_set_output(corr);
 
-                // tensor [corr] size: [1, 324, 55, 128], min: -5.405947, max: 25.431339, mean: 0.233413
-
+                // CUDA Info: ********************** corr Tensor: 1x324x55x128
+                // min: -5.0586, max: 16.8043, mean: 0.2397
+                // CPU Info: ********************** corr Tensor: 1x324x55x128
+                // min: -4.3095, max: 18.2056, mean: 0.3741
 
                 ylist = update_block.forward(ctx, net, inp, corr, m);
                 net = ylist[0]; up_mask = ylist[1]; delta_flow = ylist[2];
@@ -1783,13 +1113,14 @@ struct RAFT : GGMLNetwork {
                 // tensor [up_mask] size: [1, 576, 55, 128], min: -18.799122, max: 9.778274, mean: -0.933968
                 // tensor [delta_flow] size: [1, 2, 55, 128], min: -1.231164, max: 1.291382, mean: -0.110575
 
+                delta_flow = ggml_cont(ctx, delta_flow);
                 coords1 = ggml_add(ctx, coords1, delta_flow);
                 m = ggml_sub(ctx, coords1, coords0);
             }
         }
 
         // xxxx_debug
-        m = ggml_sub(ctx, coords1, coords0);
+        // m = ggml_sub(ctx, coords1, coords0);
         {
             m = ggml_cont(ctx, m);
             ggml_set_name(m, "m");
@@ -1800,25 +1131,22 @@ struct RAFT : GGMLNetwork {
             ggml_set_output(up_mask);
 
             // Info: ********************** m Tensor: 1x2x55x128
-            // min: -153.8433, max: 141.1413, mean: -0.9052
+            // min: -186.5938, max: 190.5045, mean: -0.0859
             // Info: ********************** up_mask Tensor: 1x576x55x128
-            // min: -19.3301, max: 8.4602, mean: -1.1862
+            // min: -18.0143, max: 8.6513, mean: -0.7198
 
-            // tensor [m] size: [1, 2, 55, 128], min: 0.0, max: 0.0, mean: 0.0
-            // tensor [up_mask] size: [1, 576, 55, 128], min: -19.438438, max: 9.087296, mean: -0.03894
+            // tensor [m] size: [1, 2, 55, 128], min: -1.239185, max: 1.018547, mean: -0.111478
+            // tensor [up_mask] size: [1, 576, 55, 128], min: -19.520226, max: 9.20424, mean: -0.050686
         }
-
-
 
         ggml_tensor_t *flow_up = upsample_flow(ctx, m, up_mask);
         flow_up = ggml_cont(ctx, flow_up);
 
         // Info: -------------- output_tensor Tensor: 1x2x440x1024
-        // min: -145.1765, max: 152.8582, mean: -3.7686
+        // min: -178.7596, max: 178.8397, mean: 0.1127
 
 
-        // tensor [flow_up] size: [1, 2, 440, 1024], min: -106.777054, max: 85.678627, mean: 1.32042
-
+        // tensor [flow_up] size: [1, 2, 440, 1024], min: -9.303978, max: 7.568922, mean: -0.884092
     	return flow_up;
     }
 };
